@@ -258,24 +258,20 @@ export class DroolsFormattingProvider {
 
         // Add space around operators
         if (this.settings.spaceAroundOperators) {
-            // Comparison operators - handle compound operators carefully
-            formatted = formatted.replace(/([a-zA-Z0-9_$)])(>=|<=|!=|==)([a-zA-Z0-9_$("'])/g, '$1 $2 $3');
-            formatted = formatted.replace(/([a-zA-Z0-9_$)])([=<>])([a-zA-Z0-9_$("'])/g, '$1 $2 $3');
-            
-            // Logical operators
-            formatted = formatted.replace(/([a-zA-Z0-9_$)])(&&|\|\|)([a-zA-Z0-9_$("'])/g, '$1 $2 $3');
-            
-            // Arithmetic operators (but not in attribute names)
-            formatted = formatted.replace(/([a-zA-Z0-9_$)])(\+)([a-zA-Z0-9_$("'])/g, '$1 $2 $3');
-            formatted = formatted.replace(/([a-zA-Z0-9_$)])(\*)([a-zA-Z0-9_$("'])/g, '$1 $2 $3');
-            formatted = formatted.replace(/([a-zA-Z0-9_$)])(\/)([a-zA-Z0-9_$("'])/g, '$1 $2 $3');
+            // Simple approach - add spaces around common operators
+            // Use \w which includes letters, digits, and underscore
+            formatted = formatted.replace(/(\w)(>=|<=|!=|==)(\w)/g, '$1 $2 $3');
+            formatted = formatted.replace(/(\w)([<>])(\w)/g, '$1 $2 $3');
+            formatted = formatted.replace(/(\w)(=)(\w)/g, '$1 $2 $3');
+            formatted = formatted.replace(/(\w)(&&|\|\|)(\w)/g, '$1 $2 $3');
+            formatted = formatted.replace(/(\w)(\+)(\w)/g, '$1 $2 $3');
+            formatted = formatted.replace(/(\w)(\*)(\w)/g, '$1 $2 $3');
+            formatted = formatted.replace(/(\w)(\/)(\w)/g, '$1 $2 $3');
             
             // Handle minus operator carefully (not for attribute names like "no-loop")
-            formatted = formatted.replace(/([a-zA-Z0-9_$)])-([a-zA-Z0-9_$("'])/g, (match, before, after) => {
+            formatted = formatted.replace(/(\w)-(\w)/g, (match, before, after) => {
                 // Check if this looks like an attribute name
-                const beforeChar = before.slice(-1);
-                const afterChar = after.charAt(0);
-                if (/[a-zA-Z]/.test(beforeChar) && /[a-zA-Z]/.test(afterChar)) {
+                if (/[a-zA-Z]/.test(before) && /[a-zA-Z]/.test(after)) {
                     return match; // Keep as-is for attribute names
                 }
                 return `${before} - ${after}`;
@@ -295,9 +291,10 @@ export class DroolsFormattingProvider {
         // Format function braces - ensure space before opening brace
         formatted = formatted.replace(/\)\s*\{/g, ') {');
         
-        // Fix generic type formatting - remove spaces inside angle brackets
-        formatted = formatted.replace(/\s*<\s*/g, '<');
-        formatted = formatted.replace(/\s*>\s*/g, '>');
+        // Fix generic type formatting - remove spaces inside angle brackets (but not around comparison operators)
+        // Only remove spaces around < and > when they appear to be generic type brackets
+        formatted = formatted.replace(/([a-zA-Z_][a-zA-Z0-9_]*)\s*<\s*([a-zA-Z_][a-zA-Z0-9_]*)/g, '$1<$2');
+        formatted = formatted.replace(/([a-zA-Z_][a-zA-Z0-9_]*)\s*>\s*([a-zA-Z_][a-zA-Z0-9_]*)/g, '$1>$2');
         
         // Clean up multiple spaces but preserve intentional spacing
         formatted = formatted.replace(/\s{2,}/g, ' ');
