@@ -1,0 +1,47 @@
+package com.example.rules
+
+import com.example.Person
+import com.example.Account
+import java.util.List
+
+global java.util.List results
+
+// This is a line comment
+/* This is a 
+   block comment */
+
+rule "Adult Check"
+    salience 100
+    no-loop true
+    when
+        $person : Person(age >= 18, name != null)
+        $account : Account(owner == $person, balance > 0)
+    then
+        System.out.println("Person is an adult: " + $person.getName());
+        insert(new Result($person, "ADULT"));
+        modify($account) {
+            setStatus("ACTIVE")
+        }
+end
+
+rule "Child Check"
+    when
+        $person : Person(age < 18)
+        not Account(owner == $person)
+    then
+        System.out.println("Person is a child: " + $person.getName());
+        results.add($person);
+end
+
+function String formatName(String firstName, String lastName) {
+    return firstName + " " + lastName;
+}
+
+query "findAdults"
+    $person : Person(age >= 18)
+end
+
+declare PersonResult
+    person : Person
+    category : String
+end

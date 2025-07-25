@@ -1,0 +1,375 @@
+{
+    "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+    "name": "Drools",
+    "scopeName": "source.drools",
+    "patterns": [
+        {
+            "include": "#comments"
+        },
+        {
+            "include": "#package-declaration"
+        },
+        {
+            "include": "#import-declaration"
+        },
+        {
+            "include": "#rule-declaration"
+        },
+        {
+            "include": "#function-declaration"
+        },
+        {
+            "include": "#global-declaration"
+        },
+        {
+            "include": "#keywords"
+        },
+        {
+            "include": "#variable-binding"
+        },
+        {
+            "include": "#java-method-calls"
+        },
+        {
+            "include": "#strings"
+        },
+        {
+            "include": "#numbers"
+        },
+        {
+            "include": "#operators"
+        }
+    ],
+    "repository": {
+        "package-declaration": {
+            "patterns": [
+                {
+                    "name": "meta.package.drools",
+                    "match": "^\\s*(package)\\s+([a-zA-Z_][a-zA-Z0-9_]*(?:\\.[a-zA-Z_][a-zA-Z0-9_]*)*)",
+                    "captures": {
+                        "1": {
+                            "name": "keyword.control.package.drools"
+                        },
+                        "2": {
+                            "name": "entity.name.namespace.drools"
+                        }
+                    }
+                }
+            ]
+        },
+        "import-declaration": {
+            "patterns": [
+                {
+                    "name": "meta.import.drools",
+                    "match": "^\\s*(import)\\s+([a-zA-Z_][a-zA-Z0-9_]*(?:\\.[a-zA-Z_][a-zA-Z0-9_]*)*(?:\\.\\*)?)",
+                    "captures": {
+                        "1": {
+                            "name": "keyword.control.import.drools"
+                        },
+                        "2": {
+                            "name": "entity.name.type.class.drools"
+                        }
+                    }
+                }
+            ]
+        },
+        "rule-declaration": {
+            "patterns": [
+                {
+                    "name": "meta.rule.drools",
+                    "begin": "\\b(rule)\\s+(\"[^\"]*\"|[a-zA-Z_][a-zA-Z0-9_]*)",
+                    "end": "\\b(end)\\b",
+                    "beginCaptures": {
+                        "1": {
+                            "name": "keyword.control.rule.drools"
+                        },
+                        "2": {
+                            "name": "entity.name.function.rule.drools"
+                        }
+                    },
+                    "endCaptures": {
+                        "1": {
+                            "name": "keyword.control.end.drools"
+                        }
+                    },
+                    "patterns": [
+                        {
+                            "include": "#rule-attributes"
+                        },
+                        {
+                            "include": "#when-clause"
+                        },
+                        {
+                            "include": "#then-clause"
+                        },
+                        {
+                            "include": "#comments"
+                        },
+                        {
+                            "include": "#strings"
+                        },
+                        {
+                            "include": "#numbers"
+                        },
+                        {
+                            "include": "#operators"
+                        }
+                    ]
+                }
+            ]
+        },
+        "rule-attributes": {
+            "patterns": [
+                {
+                    "name": "meta.rule.attribute.drools",
+                    "match": "\\b(salience|no-loop|lock-on-active|auto-focus|activation-group|agenda-group|ruleflow-group|date-effective|date-expires|enabled|duration|dialect)\\s*([^\\s]+)?",
+                    "captures": {
+                        "1": {
+                            "name": "keyword.other.attribute.drools"
+                        },
+                        "2": {
+                            "name": "constant.other.attribute-value.drools"
+                        }
+                    }
+                }
+            ]
+        },
+        "when-clause": {
+            "patterns": [
+                {
+                    "name": "meta.when.drools",
+                    "begin": "\\b(when)\\b",
+                    "end": "(?=\\b(then)\\b)",
+                    "beginCaptures": {
+                        "1": {
+                            "name": "keyword.control.when.drools"
+                        }
+                    },
+                    "patterns": [
+                        {
+                            "include": "#variable-binding"
+                        },
+                        {
+                            "include": "#fact-patterns"
+                        },
+                        {
+                            "include": "#keywords"
+                        },
+                        {
+                            "include": "#comments"
+                        },
+                        {
+                            "include": "#strings"
+                        },
+                        {
+                            "include": "#numbers"
+                        },
+                        {
+                            "include": "#operators"
+                        }
+                    ]
+                }
+            ]
+        },
+        "then-clause": {
+            "patterns": [
+                {
+                    "name": "meta.then.drools",
+                    "begin": "\\b(then)\\b",
+                    "end": "(?=\\b(end)\\b)",
+                    "beginCaptures": {
+                        "1": {
+                            "name": "keyword.control.then.drools"
+                        }
+                    },
+                    "patterns": [
+                        {
+                            "include": "#java-method-calls"
+                        },
+                        {
+                            "include": "#keywords"
+                        },
+                        {
+                            "include": "#comments"
+                        },
+                        {
+                            "include": "#strings"
+                        },
+                        {
+                            "include": "#numbers"
+                        },
+                        {
+                            "include": "#operators"
+                        }
+                    ]
+                }
+            ]
+        },
+        "function-declaration": {
+            "patterns": [
+                {
+                    "name": "meta.function.drools",
+                    "match": "\\b(function)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+                    "captures": {
+                        "1": {
+                            "name": "keyword.control.function.drools"
+                        },
+                        "2": {
+                            "name": "storage.type.return-type.drools"
+                        },
+                        "3": {
+                            "name": "entity.name.function.drools"
+                        }
+                    }
+                }
+            ]
+        },
+        "global-declaration": {
+            "patterns": [
+                {
+                    "name": "meta.global.drools",
+                    "match": "\\b(global)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+                    "captures": {
+                        "1": {
+                            "name": "keyword.control.global.drools"
+                        },
+                        "2": {
+                            "name": "storage.type.drools"
+                        },
+                        "3": {
+                            "name": "variable.other.global.drools"
+                        }
+                    }
+                }
+            ]
+        },
+        "variable-binding": {
+            "patterns": [
+                {
+                    "name": "meta.variable.binding.drools",
+                    "match": "(\\$[a-zA-Z_][a-zA-Z0-9_]*)\\s*(:)",
+                    "captures": {
+                        "1": {
+                            "name": "variable.other.binding.drools"
+                        },
+                        "2": {
+                            "name": "keyword.operator.binding.drools"
+                        }
+                    }
+                }
+            ]
+        },
+        "fact-patterns": {
+            "patterns": [
+                {
+                    "name": "meta.fact.pattern.drools",
+                    "match": "\\b([A-Z][a-zA-Z0-9_]*)\\s*\\(",
+                    "captures": {
+                        "1": {
+                            "name": "entity.name.type.class.fact.drools"
+                        }
+                    }
+                }
+            ]
+        },
+        "java-method-calls": {
+            "patterns": [
+                {
+                    "name": "meta.method.call.drools",
+                    "match": "([a-zA-Z_][a-zA-Z0-9_]*|\\$[a-zA-Z_][a-zA-Z0-9_]*)\\s*\\.\\s*([a-zA-Z_][a-zA-Z0-9_]*)\\s*\\(",
+                    "captures": {
+                        "1": {
+                            "name": "variable.other.object.drools"
+                        },
+                        "2": {
+                            "name": "entity.name.function.method.drools"
+                        }
+                    }
+                }
+            ]
+        },
+        "keywords": {
+            "patterns": [
+                {
+                    "name": "keyword.control.drools",
+                    "match": "\\b(rule|when|then|end|package|import|global|function|query|declare|dialect|salience|no-loop|lock-on-active|auto-focus|activation-group|agenda-group|ruleflow-group|date-effective|date-expires|enabled|duration)\\b"
+                },
+                {
+                    "name": "keyword.operator.drools",
+                    "match": "\\b(and|or|not|exists|forall|from|collect|accumulate|eval|instanceof)\\b"
+                },
+                {
+                    "name": "storage.type.drools",
+                    "match": "\\b(insert|update|modify|delete|retract)\\b"
+                }
+            ]
+        },
+        "strings": {
+            "patterns": [
+                {
+                    "name": "string.quoted.double.drools",
+                    "begin": "\"",
+                    "end": "\"",
+                    "patterns": [
+                        {
+                            "name": "constant.character.escape.drools",
+                            "match": "\\\\."
+                        }
+                    ]
+                },
+                {
+                    "name": "string.quoted.single.drools",
+                    "begin": "'",
+                    "end": "'",
+                    "patterns": [
+                        {
+                            "name": "constant.character.escape.drools",
+                            "match": "\\\\."
+                        }
+                    ]
+                }
+            ]
+        },
+        "comments": {
+            "patterns": [
+                {
+                    "name": "comment.line.double-slash.drools",
+                    "match": "//.*$"
+                },
+                {
+                    "name": "comment.block.drools",
+                    "begin": "/\\*",
+                    "end": "\\*/"
+                }
+            ]
+        },
+        "numbers": {
+            "patterns": [
+                {
+                    "name": "constant.numeric.drools",
+                    "match": "\\b\\d+(\\.\\d+)?\\b"
+                }
+            ]
+        },
+        "operators": {
+            "patterns": [
+                {
+                    "name": "keyword.operator.comparison.drools",
+                    "match": "(==|!=|<=|>=|<|>)"
+                },
+                {
+                    "name": "keyword.operator.logical.drools",
+                    "match": "(&&|\\|\\||!)"
+                },
+                {
+                    "name": "keyword.operator.assignment.drools",
+                    "match": "="
+                },
+                {
+                    "name": "keyword.operator.arithmetic.drools",
+                    "match": "(\\+|\\-|\\*|\\/|%)"
+                }
+            ]
+        }
+    }
+}
