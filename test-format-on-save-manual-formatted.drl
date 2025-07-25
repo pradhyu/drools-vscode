@@ -1,0 +1,28 @@
+package com.example.rules
+
+rule "Test Format On Save"
+salience 100
+    when
+    $person : Person(age >= 18, name != null)
+    $account : Account(owner==$person, balance > 1000)
+    not(Debt(person==$person))
+    then
+    $account.setStatus("PREMIUM");
+    update($account);
+    System.out.println("Premium status granted");
+end
+
+function boolean isAdult(int age) {
+    if(age >= 18) {
+    return true;
+}else{
+return false;
+}
+}
+
+rule "Use Function"
+    when
+    $person : Person(isAdult(age)==true)
+    then
+    System.out.println("Adult found");
+end

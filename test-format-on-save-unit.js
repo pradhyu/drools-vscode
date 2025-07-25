@@ -181,4 +181,27 @@ return true;
     }
 }
 
+// Test with the manual test file
+console.log('\n=== Testing with manual test file ===');
+const manualTestContent = fs.readFileSync('test-format-on-save-manual.drl', 'utf8');
+
+const formattingProvider = new DroolsFormattingProvider();
+const document = new MockTextDocument(manualTestContent);
+const fullRange = {
+    start: { line: 0, character: 0 },
+    end: { line: document.lineCount - 1, character: document.lines[document.lineCount - 1].length }
+};
+
+const edits = formattingProvider.formatRange(document, fullRange, mockParseResult);
+const formattedContent = edits[0].newText;
+
+console.log('Original content:');
+console.log(manualTestContent);
+console.log('\nFormatted content:');
+console.log(formattedContent);
+
+// Write the formatted content to a new file for comparison
+fs.writeFileSync('test-format-on-save-manual-formatted.drl', formattedContent);
+console.log('\nFormatted content written to test-format-on-save-manual-formatted.drl');
+
 runTests();

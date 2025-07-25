@@ -11,10 +11,10 @@ let client: LanguageClient;
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('Drools VSCode Extension is now active!');
-    
+
     // Start the language server
     startLanguageServer(context);
-    
+
     // Register the extension for .drl files
     const onDidOpenTextDocument = vscode.workspace.onDidOpenTextDocument((document) => {
         if (document.languageId === 'drools') {
@@ -23,7 +23,7 @@ export function activate(context: vscode.ExtensionContext) {
             vscode.languages.setTextDocumentLanguage(document, 'drools');
         }
     });
-    
+
     // Handle files that are already open when extension activates
     vscode.workspace.textDocuments.forEach((document) => {
         if (document.fileName.endsWith('.drl') && document.languageId !== 'drools') {
@@ -31,7 +31,7 @@ export function activate(context: vscode.ExtensionContext) {
             vscode.languages.setTextDocumentLanguage(document, 'drools');
         }
     });
-    
+
     // Register command to manually set language to drools
     const setLanguageCommand = vscode.commands.registerCommand('drools.setLanguage', () => {
         const activeEditor = vscode.window.activeTextEditor;
@@ -44,7 +44,7 @@ export function activate(context: vscode.ExtensionContext) {
     // Register format-on-save functionality
     const formatOnSaveHandler = vscode.workspace.onWillSaveTextDocument(async (event) => {
         const document = event.document;
-        
+
         // Only handle .drl files
         if (document.languageId !== 'drools') {
             return;
@@ -53,7 +53,7 @@ export function activate(context: vscode.ExtensionContext) {
         // Check if format-on-save is enabled
         const config = vscode.workspace.getConfiguration('drools', document.uri);
         const formatOnSave = config.get<boolean>('formatOnSave', true);
-        
+
         if (!formatOnSave) {
             return;
         }
@@ -83,14 +83,14 @@ export function activate(context: vscode.ExtensionContext) {
             })
         );
     });
-    
+
     context.subscriptions.push(onDidOpenTextDocument, setLanguageCommand, formatOnSaveHandler);
 }
 
 function startLanguageServer(context: vscode.ExtensionContext) {
     // The server is implemented in node
     const serverModule = context.asAbsolutePath(path.join('out', 'server', 'server.js'));
-    
+
     // The debug options for the server
     const debugOptions = { execArgv: ['--nolazy', '--inspect=6009'] };
 
