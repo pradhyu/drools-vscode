@@ -1,0 +1,32 @@
+// This file demonstrates the Drools snippet system
+// Type the following prefixes and press Tab to expand:
+
+// Basic rule template: type "rule" + Tab
+// Conditional rule: type "rule-condition" + Tab  
+// Function definition: type "function" + Tab
+// Import statement: type "import" + Tab
+// Package declaration: type "package" + Tab
+
+// Example of expanded snippets:
+
+package com.example.rules;
+
+import com.example.Person;
+
+rule "Example Rule"
+when
+    person : Person(age >= 18)
+then
+    person.setAdult(true);
+    update(person);
+end
+
+function boolean isEligible(Person person) {
+    return person.getAge() >= 21;
+}
+
+// The snippet system provides:
+// 1. ✅ Pre-defined rule templates (22 built-in snippets)
+// 2. ✅ Common patterns (rules, functions, imports)  
+// 3. ✅ Tab stops for easy customization (94 tab stops total)
+// 4. ✅ Custom snippet management UI via commands

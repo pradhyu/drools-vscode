@@ -61,49 +61,49 @@
   - Test formatting behavior with various rule structures
   - _Requirements: 6.1, 6.2, 6.3, 6.4_
 
-- [ ] 10. Create bracket matching and code folding features
+- [x] 10. Create bracket matching and code folding features
   - Implement bracket matching for rule blocks, function definitions, and conditional statements
   - Add code folding ranges for rules, functions, and large comment blocks
   - Create folding summary text that shows rule names or function signatures
   - Test folding behavior with nested rule structures
   - _Requirements: 5.1, 5.2, 5.3, 5.4_
 
-- [ ] 11. Build snippet system for common Drools patterns
+- [x] 11. Build snippet system for common Drools patterns
   - Create snippet definitions for basic rule templates
   - Add snippets for conditional rules, function definitions, and import statements
   - Implement tab stops and placeholder variables in snippets
   - Create user interface for managing custom snippets
   - _Requirements: 7.1, 7.2, 7.3, 7.4_
 
-- [ ] 12. Implement symbol provider for navigation
+- [x] 12. Implement symbol provider for navigation
   - Create document symbol provider that identifies rules, functions, and globals
   - Add outline view support showing document structure
   - Implement go-to-definition functionality for rule and function references
   - Add workspace symbol search for finding rules across multiple files
   - _Requirements: 5.3, 2.2_
 
-- [ ] 13. Add comprehensive error handling and recovery
+- [x] 13. Add comprehensive error handling and recovery
   - Implement graceful degradation when language server fails
   - Add error recovery in parser to continue parsing after syntax errors
   - Create fallback syntax highlighting when full parsing is unavailable
   - Add logging and diagnostic information for troubleshooting
   - _Requirements: 3.1, 3.4_
 
-- [-] 14. Create extension configuration and settings
+- [x] 14. Create extension configuration and settings
   - Add user settings for enabling/disabling specific features
   - Create workspace-specific configuration options
   - Implement settings for formatting preferences and style rules
   - Add configuration for snippet behavior and custom templates
   - _Requirements: 6.2, 7.4_
 
-- [ ] 15. Build comprehensive test suite
+- [x] 15. Build comprehensive test suite
   - Create unit tests for parser functionality with various Drools constructs
   - Add integration tests for language server communication
   - Implement tests for completion, diagnostic, and formatting providers
   - Create performance tests for large .drl files
   - _Requirements: All requirements validation_
 
-- [ ] 16. Optimize performance and memory usage
+- [x] 16. Optimize performance and memory usage
   - Implement incremental parsing for large documents
   - Add caching for AST and diagnostic results
   - Optimize language server memory usage and garbage collection

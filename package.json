@@ -2,8 +2,26 @@
   "name": "drools-vscode-extension",
   "displayName": "Drools Language Support",
   "description": "Comprehensive syntax highlighting and editing support for Drools Rule Language (.drl) files",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "publisher": "drools-community",
+  "author": {
+    "name": "Drools Community",
+    "email": "community@drools.org"
+  },
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/drools-community/drools-vscode-extension",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/drools-community/drools-vscode-extension.git"
+  },
+  "bugs": {
+    "url": "https://github.com/drools-community/drools-vscode-extension/issues"
+  },
+  "icon": "images/icon.png",
+  "galleryBanner": {
+    "color": "#2E7D32",
+    "theme": "dark"
+  },
   "engines": {
     "vscode": "^1.74.0"
   },
@@ -18,7 +36,11 @@
     "rules",
     "business rules",
     "drl",
-    "syntax highlighting"
+    "syntax highlighting",
+    "intellisense",
+    "code completion",
+    "formatting",
+    "validation"
   ],
   "activationEvents": [
     "onLanguage:drools"
@@ -28,10 +50,18 @@
     "languages": [
       {
         "id": "drools",
-        "aliases": ["Drools", "drools", "DRL"],
-        "extensions": [".drl"],
+        "aliases": [
+          "Drools",
+          "drools",
+          "DRL"
+        ],
+        "extensions": [
+          ".drl"
+        ],
         "configuration": "./language-configuration.json",
-        "mimetypes": ["text/x-drools"]
+        "mimetypes": [
+          "text/x-drools"
+        ]
       }
     ],
     "grammars": [
@@ -41,10 +71,36 @@
         "path": "./syntaxes/drools.tmLanguage.json"
       }
     ],
+    "snippets": [
+      {
+        "language": "drools",
+        "path": "./snippets/drools.json"
+      }
+    ],
     "commands": [
       {
         "command": "drools.setLanguage",
         "title": "Set Language to Drools",
+        "category": "Drools"
+      },
+      {
+        "command": "drools.createCustomSnippet",
+        "title": "Create Custom Snippet",
+        "category": "Drools"
+      },
+      {
+        "command": "drools.manageSnippets",
+        "title": "Manage Snippets",
+        "category": "Drools"
+      },
+      {
+        "command": "drools.exportSnippets",
+        "title": "Export Snippets",
+        "category": "Drools"
+      },
+      {
+        "command": "drools.importSnippets",
+        "title": "Import Snippets",
         "category": "Drools"
       }
     ],
@@ -52,93 +108,416 @@
       "type": "object",
       "title": "Drools",
       "properties": {
-        "drools.formatOnSave": {
+        "drools.features.enableSyntaxHighlighting": {
           "type": "boolean",
           "default": true,
-          "description": "Automatically format .drl files when saving"
+          "description": "Enable syntax highlighting for .drl files",
+          "scope": "window"
         },
-        "drools.maxNumberOfProblems": {
-          "type": "number",
-          "default": 1000,
-          "description": "Maximum number of problems to report"
-        },
-        "drools.enableDiagnostics": {
+        "drools.features.enableCompletion": {
           "type": "boolean",
           "default": true,
-          "description": "Enable diagnostic reporting for syntax and semantic errors"
+          "description": "Enable code completion and IntelliSense features",
+          "scope": "window"
         },
-        "drools.enableCompletion": {
+        "drools.features.enableDiagnostics": {
           "type": "boolean",
           "default": true,
-          "description": "Enable code completion and IntelliSense features"
+          "description": "Enable diagnostic reporting for syntax and semantic errors",
+          "scope": "window"
         },
-        "drools.enableSyntaxValidation": {
+        "drools.features.enableFormatting": {
           "type": "boolean",
           "default": true,
-          "description": "Enable syntax validation"
+          "description": "Enable document formatting features",
+          "scope": "window"
         },
-        "drools.enableSemanticValidation": {
+        "drools.features.enableBracketMatching": {
           "type": "boolean",
           "default": true,
-          "description": "Enable semantic validation"
+          "description": "Enable bracket matching and code folding",
+          "scope": "window"
         },
-        "drools.enableBestPracticeWarnings": {
+        "drools.features.enableSnippets": {
           "type": "boolean",
           "default": true,
-          "description": "Enable best practice warnings"
+          "description": "Enable code snippets",
+          "scope": "window"
         },
-        "drools.enableKeywordCompletion": {
+        "drools.features.enableSymbolProvider": {
           "type": "boolean",
           "default": true,
-          "description": "Enable keyword completion"
+          "description": "Enable symbol provider for navigation and outline",
+          "scope": "window"
         },
-        "drools.enableFactTypeCompletion": {
+        "drools.completion.enableKeywords": {
           "type": "boolean",
           "default": true,
-          "description": "Enable fact type completion"
+          "description": "Enable keyword completion",
+          "scope": "resource"
         },
-        "drools.enableFunctionCompletion": {
+        "drools.completion.enableFactTypes": {
           "type": "boolean",
           "default": true,
-          "description": "Enable function completion"
+          "description": "Enable fact type completion",
+          "scope": "resource"
         },
-        "drools.enableVariableCompletion": {
+        "drools.completion.enableFunctions": {
           "type": "boolean",
           "default": true,
-          "description": "Enable variable completion"
+          "description": "Enable function completion",
+          "scope": "resource"
         },
-        "drools.maxCompletionItems": {
+        "drools.completion.enableVariables": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable variable completion",
+          "scope": "resource"
+        },
+        "drools.completion.maxItems": {
           "type": "number",
           "default": 50,
-          "description": "Maximum number of completion items to show"
+          "minimum": 1,
+          "maximum": 200,
+          "description": "Maximum number of completion items to show",
+          "scope": "resource"
+        },
+        "drools.completion.triggerCharacters": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            ".",
+            " ",
+            "(",
+            ","
+          ],
+          "description": "Characters that trigger completion suggestions",
+          "scope": "resource"
+        },
+        "drools.diagnostics.enableSyntaxValidation": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable syntax validation",
+          "scope": "resource"
+        },
+        "drools.diagnostics.enableSemanticValidation": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable semantic validation",
+          "scope": "resource"
+        },
+        "drools.diagnostics.enableBestPracticeWarnings": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable best practice warnings",
+          "scope": "resource"
+        },
+        "drools.diagnostics.maxProblems": {
+          "type": "number",
+          "default": 1000,
+          "minimum": 1,
+          "maximum": 10000,
+          "description": "Maximum number of problems to report",
+          "scope": "resource"
+        },
+        "drools.diagnostics.severity": {
+          "type": "object",
+          "properties": {
+            "syntaxErrors": {
+              "type": "string",
+              "enum": [
+                "error",
+                "warning",
+                "info",
+                "hint"
+              ],
+              "default": "error",
+              "description": "Severity level for syntax errors"
+            },
+            "semanticErrors": {
+              "type": "string",
+              "enum": [
+                "error",
+                "warning",
+                "info",
+                "hint"
+              ],
+              "default": "error",
+              "description": "Severity level for semantic errors"
+            },
+            "bestPracticeViolations": {
+              "type": "string",
+              "enum": [
+                "error",
+                "warning",
+                "info",
+                "hint"
+              ],
+              "default": "warning",
+              "description": "Severity level for best practice violations"
+            }
+          },
+          "default": {
+            "syntaxErrors": "error",
+            "semanticErrors": "error",
+            "bestPracticeViolations": "warning"
+          },
+          "description": "Severity levels for different types of diagnostics",
+          "scope": "resource"
+        },
+        "drools.formatting.formatOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically format .drl files when saving",
+          "scope": "resource"
+        },
+        "drools.formatting.formatOnType": {
+          "type": "boolean",
+          "default": false,
+          "description": "Format code as you type",
+          "scope": "resource"
+        },
+        "drools.formatting.indentSize": {
+          "type": "number",
+          "default": 4,
+          "minimum": 1,
+          "maximum": 8,
+          "description": "Number of spaces for indentation",
+          "scope": "resource"
+        },
+        "drools.formatting.insertSpaces": {
+          "type": "boolean",
+          "default": true,
+          "description": "Use spaces instead of tabs for indentation",
+          "scope": "resource"
+        },
+        "drools.formatting.trimTrailingWhitespace": {
+          "type": "boolean",
+          "default": true,
+          "description": "Remove trailing whitespace when formatting",
+          "scope": "resource"
+        },
+        "drools.formatting.insertFinalNewline": {
+          "type": "boolean",
+          "default": true,
+          "description": "Insert a final newline at the end of the file",
+          "scope": "resource"
+        },
+        "drools.formatting.spaceAroundOperators": {
+          "type": "boolean",
+          "default": true,
+          "description": "Add spaces around operators (==, !=, &&, ||, etc.)",
+          "scope": "resource"
+        },
+        "drools.formatting.spaceAfterCommas": {
+          "type": "boolean",
+          "default": true,
+          "description": "Add spaces after commas in parameter lists",
+          "scope": "resource"
+        },
+        "drools.formatting.alignRuleBlocks": {
+          "type": "boolean",
+          "default": true,
+          "description": "Align rule blocks consistently",
+          "scope": "resource"
+        },
+        "drools.formatting.preserveBlankLines": {
+          "type": "number",
+          "default": 1,
+          "minimum": 0,
+          "maximum": 5,
+          "description": "Maximum number of consecutive blank lines to preserve",
+          "scope": "resource"
+        },
+        "drools.snippets.enableBuiltIn": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable built-in code snippets",
+          "scope": "resource"
+        },
+        "drools.snippets.enableCustom": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable custom user-defined snippets",
+          "scope": "resource"
+        },
+        "drools.snippets.customPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to custom snippets file (relative to workspace root)",
+          "scope": "resource"
+        },
+        "drools.snippets.triggerCharacters": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "r",
+            "f",
+            "i",
+            "p",
+            "g",
+            "q",
+            "w",
+            "t"
+          ],
+          "description": "Characters that trigger snippet suggestions",
+          "scope": "resource"
+        },
+        "drools.snippets.showInCompletion": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show snippets in completion suggestions",
+          "scope": "resource"
+        },
+        "drools.snippets.templates": {
+          "type": "object",
+          "properties": {
+            "basicRule": {
+              "type": "boolean",
+              "default": true,
+              "description": "Enable basic rule template"
+            },
+            "conditionalRule": {
+              "type": "boolean",
+              "default": true,
+              "description": "Enable conditional rule template"
+            },
+            "functionDefinition": {
+              "type": "boolean",
+              "default": true,
+              "description": "Enable function definition template"
+            },
+            "importStatement": {
+              "type": "boolean",
+              "default": true,
+              "description": "Enable import statement template"
+            },
+            "packageDeclaration": {
+              "type": "boolean",
+              "default": true,
+              "description": "Enable package declaration template"
+            },
+            "globalDeclaration": {
+              "type": "boolean",
+              "default": true,
+              "description": "Enable global declaration template"
+            },
+            "queryDefinition": {
+              "type": "boolean",
+              "default": true,
+              "description": "Enable query definition template"
+            }
+          },
+          "default": {
+            "basicRule": true,
+            "conditionalRule": true,
+            "functionDefinition": true,
+            "importStatement": true,
+            "packageDeclaration": true,
+            "globalDeclaration": true,
+            "queryDefinition": true
+          },
+          "description": "Enable/disable specific snippet templates",
+          "scope": "resource"
+        },
+        "drools.server.maxFileSize": {
+          "type": "number",
+          "default": 5242880,
+          "minimum": 1024,
+          "description": "Maximum file size in bytes for language server processing (default: 5MB)",
+          "scope": "window"
+        },
+        "drools.server.timeout": {
+          "type": "number",
+          "default": 30000,
+          "minimum": 1000,
+          "description": "Language server request timeout in milliseconds",
+          "scope": "window"
+        },
+        "drools.server.logLevel": {
+          "type": "string",
+          "enum": [
+            "off",
+            "error",
+            "warn",
+            "info",
+            "debug",
+            "trace"
+          ],
+          "default": "info",
+          "description": "Language server log level",
+          "scope": "window"
+        },
+        "drools.performance.enableIncrementalParsing": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable incremental parsing for better performance",
+          "scope": "window"
+        },
+        "drools.performance.enableCaching": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable caching of AST and diagnostic results",
+          "scope": "window"
+        },
+        "drools.performance.debounceDelay": {
+          "type": "number",
+          "default": 300,
+          "minimum": 0,
+          "maximum": 2000,
+          "description": "Debounce delay in milliseconds for expensive operations",
+          "scope": "window"
         }
       }
     }
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
+    "vscode:prepublish": "npm run webpack-prod",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src --ext ts",
     "test": "node ./out/test/runTest.js",
-    "package": "vsce package",
+    "test:unit": "jest --testPathPatterns=test --testPathIgnorePatterns=test/integration,test/performance",
+    "test:integration": "jest --testPathPatterns=test/integration",
+    "test:performance": "jest --testPathPatterns=test/performance --runInBand",
+    "test:all": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "package": "vsce package --no-dependencies",
+    "package:pre-release": "vsce package --pre-release --no-dependencies",
+    "publish": "vsce publish --no-dependencies",
+    "publish:pre-release": "vsce publish --pre-release --no-dependencies",
     "webpack": "webpack --mode development",
     "webpack-dev": "webpack --mode development --watch",
-    "webpack-prod": "webpack --mode production"
+    "webpack-prod": "webpack --mode production",
+    "clean": "rimraf out *.vsix",
+    "build": "npm run clean && npm run webpack-prod",
+    "build:dev": "npm run clean && npm run webpack",
+    "prepare-release": "npm run test:all && npm run build && npm run package"
   },
   "devDependencies": {
-    "@types/vscode": "^1.74.0",
+    "@types/jest": "^30.0.0",
+    "@types/mocha": "^10.0.10",
     "@types/node": "16.x",
+    "@types/vscode": "^1.74.0",
     "@typescript-eslint/eslint-plugin": "^5.45.0",
     "@typescript-eslint/parser": "^5.45.0",
+    "@vscode/test-electron": "^2.5.2",
     "eslint": "^8.28.0",
-    "typescript": "^4.9.4",
-    "webpack": "^5.75.0",
-    "webpack-cli": "^5.0.1",
+    "jest": "^30.0.5",
+    "mocha": "^11.7.1",
+    "rimraf": "^3.0.2",
+    "ts-jest": "^29.4.0",
     "ts-loader": "^9.4.1",
-    "@vscode/test-electron": "^2.2.0",
-    "vsce": "^2.15.0"
+    "typescript": "^4.9.4",
+    "vsce": "^2.15.0",
+    "webpack": "^5.75.0",
+    "webpack-cli": "^5.0.1"
   },
   "dependencies": {
     "vscode-languageclient": "^8.0.2",

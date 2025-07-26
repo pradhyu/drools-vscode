@@ -34,26 +34,245 @@ export interface ParseResult {
     errors: ParseError[];
 }
 
+export interface IncrementalParseOptions {
+    ranges?: { start: number; end: number }[];
+    previousAST?: DroolsAST;
+    enableIncrementalParsing?: boolean;
+}
+
 export class DroolsParser {
     private text: string = '';
     private lines: string[] = [];
     private currentLine: number = 0;
     private currentChar: number = 0;
     private errors: ParseError[] = [];
+    private recoveryMode: boolean = false;
+    private maxErrors: number = 100;
+    private parseStartTime: number = 0;
 
-    public parse(text: string): ParseResult {
+    public parse(text: string, options?: IncrementalParseOptions): ParseResult {
+        this.parseStartTime = Date.now();
         this.text = text;
         this.lines = text.split('\n');
         this.currentLine = 0;
         this.currentChar = 0;
         this.errors = [];
+        this.recoveryMode = false;
 
-        const ast = this.parseFile();
+        let ast: DroolsAST;
+        
+        try {
+            if (options?.enableIncrementalParsing && options.ranges && options.previousAST) {
+                ast = this.parseIncremental(options.ranges, options.previousAST);
+            } else {
+                ast = this.parseFile();
+            }
+        } catch (error) {
+            // If parsing fails completely, create a minimal AST and enable recovery mode
+            this.addError(`Critical parsing error: ${error}`, this.getCurrentPosition(), 'error');
+            ast = this.createMinimalAST();
+            this.recoveryMode = true;
+        }
         
         return {
             ast,
             errors: this.errors
         };
+    }
+
+    /**
+     * Perform incremental parsing on specific ranges
+     */
+    private parseIncremental(ranges: { start: number; end: number }[], previousAST: DroolsAST): DroolsAST {
+        // Start with the previous AST
+        const ast: DroolsAST = {
+            type: 'DroolsFile',
+            range: previousAST.range,
+            packageDeclaration: previousAST.packageDeclaration,
+            imports: [...previousAST.imports],
+            globals: [...previousAST.globals],
+            functions: [...previousAST.functions],
+            rules: [...previousAST.rules],
+            queries: [...previousAST.queries],
+            declares: [...previousAST.declares]
+        };
+
+        // Parse only the changed ranges
+        for (const range of ranges) {
+            const rangeText = this.text.substring(range.start, range.end);
+            const rangeLines = rangeText.split('\n');
+            
+            // Calculate line numbers for this range
+            const startLine = this.getLineFromOffset(range.start);
+            const endLine = this.getLineFromOffset(range.end);
+            
+            // Remove old AST nodes that fall within this range
+            this.removeNodesInRange(ast, startLine, endLine);
+            
+            // Parse the range
+            const rangeAST = this.parseRange(rangeText, startLine);
+            
+            // Merge the new nodes into the AST
+            this.mergeAST(ast, rangeAST);
+        }
+
+        return ast;
+    }
+
+    /**
+     * Parse a specific range of text
+     */
+    private parseRange(text: string, startLine: number): DroolsAST {
+        const originalText = this.text;
+        const originalLines = this.lines;
+        const originalCurrentLine = this.currentLine;
+        const originalCurrentChar = this.currentChar;
+
+        // Set up for range parsing
+        this.text = text;
+        this.lines = text.split('\n');
+        this.currentLine = 0;
+        this.currentChar = 0;
+
+        const ast = this.parseFile();
+
+        // Adjust line numbers in the AST
+        this.adjustLineNumbers(ast, startLine);
+
+        // Restore original state
+        this.text = originalText;
+        this.lines = originalLines;
+        this.currentLine = originalCurrentLine;
+        this.currentChar = originalCurrentChar;
+
+        return ast;
+    }
+
+    /**
+     * Remove AST nodes that fall within the specified line range
+     */
+    private removeNodesInRange(ast: DroolsAST, startLine: number, endLine: number): void {
+        // Remove package declaration if in range
+        if (ast.packageDeclaration && this.isNodeInRange(ast.packageDeclaration, startLine, endLine)) {
+            ast.packageDeclaration = undefined;
+        }
+
+        // Remove imports in range
+        ast.imports = ast.imports.filter(node => !this.isNodeInRange(node, startLine, endLine));
+
+        // Remove globals in range
+        ast.globals = ast.globals.filter(node => !this.isNodeInRange(node, startLine, endLine));
+
+        // Remove functions in range
+        ast.functions = ast.functions.filter(node => !this.isNodeInRange(node, startLine, endLine));
+
+        // Remove rules in range
+        ast.rules = ast.rules.filter(node => !this.isNodeInRange(node, startLine, endLine));
+
+        // Remove queries in range
+        ast.queries = ast.queries.filter(node => !this.isNodeInRange(node, startLine, endLine));
+
+        // Remove declares in range
+        ast.declares = ast.declares.filter(node => !this.isNodeInRange(node, startLine, endLine));
+    }
+
+    /**
+     * Check if a node falls within the specified line range
+     */
+    private isNodeInRange(node: AnyASTNode, startLine: number, endLine: number): boolean {
+        return node.range.start.line >= startLine && node.range.end.line <= endLine;
+    }
+
+    /**
+     * Merge new AST nodes into the existing AST
+     */
+    private mergeAST(targetAST: DroolsAST, sourceAST: DroolsAST): void {
+        if (sourceAST.packageDeclaration) {
+            targetAST.packageDeclaration = sourceAST.packageDeclaration;
+        }
+
+        targetAST.imports.push(...sourceAST.imports);
+        targetAST.globals.push(...sourceAST.globals);
+        targetAST.functions.push(...sourceAST.functions);
+        targetAST.rules.push(...sourceAST.rules);
+        targetAST.queries.push(...sourceAST.queries);
+        targetAST.declares.push(...sourceAST.declares);
+
+        // Sort nodes by line number to maintain order
+        targetAST.imports.sort((a, b) => a.range.start.line - b.range.start.line);
+        targetAST.globals.sort((a, b) => a.range.start.line - b.range.start.line);
+        targetAST.functions.sort((a, b) => a.range.start.line - b.range.start.line);
+        targetAST.rules.sort((a, b) => a.range.start.line - b.range.start.line);
+        targetAST.queries.sort((a, b) => a.range.start.line - b.range.start.line);
+        targetAST.declares.sort((a, b) => a.range.start.line - b.range.start.line);
+    }
+
+    /**
+     * Adjust line numbers in AST nodes by adding an offset
+     */
+    private adjustLineNumbers(ast: DroolsAST, lineOffset: number): void {
+        const adjustRange = (range: Range) => {
+            range.start.line += lineOffset;
+            range.end.line += lineOffset;
+        };
+
+        const adjustNode = (node: AnyASTNode) => {
+            adjustRange(node.range);
+        };
+
+        adjustRange(ast.range);
+
+        if (ast.packageDeclaration) {
+            adjustNode(ast.packageDeclaration);
+        }
+
+        ast.imports.forEach(adjustNode);
+        ast.globals.forEach(adjustNode);
+        ast.functions.forEach(node => {
+            adjustNode(node);
+            node.parameters.forEach(adjustNode);
+        });
+        ast.rules.forEach(node => {
+            adjustNode(node);
+            node.attributes.forEach(adjustNode);
+            if (node.when) {
+                adjustNode(node.when);
+                node.when.conditions.forEach(adjustNode);
+            }
+            if (node.then) {
+                adjustNode(node.then);
+            }
+        });
+        ast.queries.forEach(node => {
+            adjustNode(node);
+            node.parameters.forEach(adjustNode);
+            node.conditions.forEach(adjustNode);
+        });
+        ast.declares.forEach(node => {
+            adjustNode(node);
+            node.fields.forEach(adjustNode);
+        });
+    }
+
+    /**
+     * Get line number from text offset
+     */
+    private getLineFromOffset(offset: number): number {
+        let currentOffset = 0;
+        for (let line = 0; line < this.lines.length; line++) {
+            if (currentOffset + this.lines[line].length >= offset) {
+                return line;
+            }
+            currentOffset += this.lines[line].length + 1; // +1 for newline
+        }
+        return this.lines.length - 1;
+    }
+
+    /**
+     * Get parsing performance metrics
+     */
+    public getParseTime(): number {
+        return Date.now() - this.parseStartTime;
     }
 
     private parseFile(): DroolsAST {
@@ -83,21 +302,59 @@ export class DroolsParser {
             }
 
             if (line.startsWith('package ')) {
-                ast.packageDeclaration = this.parsePackage();
+                const pkg = this.parseWithRecovery(
+                    () => this.parsePackage(),
+                    { type: 'Package' as const, name: '', range: { start: this.getCurrentPosition(), end: this.getCurrentPosition() } },
+                    'Error parsing package declaration'
+                );
+                ast.packageDeclaration = pkg;
             } else if (line.startsWith('import ')) {
-                ast.imports.push(this.parseImport());
+                const importNode = this.parseWithRecovery(
+                    () => this.parseImport(),
+                    { type: 'Import' as const, path: '', isStatic: false, range: { start: this.getCurrentPosition(), end: this.getCurrentPosition() } },
+                    'Error parsing import statement'
+                );
+                ast.imports.push(importNode);
             } else if (line.startsWith('global ')) {
-                ast.globals.push(this.parseGlobal());
+                const global = this.parseWithRecovery(
+                    () => this.parseGlobal(),
+                    { type: 'Global' as const, dataType: '', name: '', range: { start: this.getCurrentPosition(), end: this.getCurrentPosition() } },
+                    'Error parsing global declaration'
+                );
+                ast.globals.push(global);
             } else if (line.startsWith('function ')) {
-                ast.functions.push(this.parseFunction());
+                const func = this.parseWithRecovery(
+                    () => this.parseFunction(),
+                    { type: 'Function' as const, returnType: '', name: '', parameters: [], body: '', range: { start: this.getCurrentPosition(), end: this.getCurrentPosition() } },
+                    'Error parsing function declaration'
+                );
+                ast.functions.push(func);
             } else if (line.startsWith('rule ')) {
-                ast.rules.push(this.parseRule());
+                const rule = this.parseWithRecovery(
+                    () => this.parseRule(),
+                    { type: 'Rule' as const, name: '', attributes: [], when: undefined, then: undefined, range: { start: this.getCurrentPosition(), end: this.getCurrentPosition() } },
+                    'Error parsing rule declaration'
+                );
+                ast.rules.push(rule);
             } else if (line.startsWith('query ')) {
-                ast.queries.push(this.parseQuery());
+                const query = this.parseWithRecovery(
+                    () => this.parseQuery(),
+                    { type: 'Query' as const, name: '', parameters: [], conditions: [], range: { start: this.getCurrentPosition(), end: this.getCurrentPosition() } },
+                    'Error parsing query declaration'
+                );
+                ast.queries.push(query);
             } else if (line.startsWith('declare ')) {
-                ast.declares.push(this.parseDeclare());
+                const declare = this.parseWithRecovery(
+                    () => this.parseDeclare(),
+                    { type: 'Declare' as const, name: '', fields: [], range: { start: this.getCurrentPosition(), end: this.getCurrentPosition() } },
+                    'Error parsing declare statement'
+                );
+                ast.declares.push(declare);
             } else {
-                // Skip unknown lines or comments
+                // Skip unknown lines or comments, but log them for debugging
+                if (line && !line.startsWith('//') && !line.startsWith('/*')) {
+                    this.addError(`Unknown construct: ${line}`, this.getCurrentPosition(), 'warning');
+                }
                 this.nextLine();
             }
             
@@ -217,8 +474,10 @@ export class DroolsParser {
         const parameters = this.parseParameters(paramString);
         
         // Parse function body
+        // Check if the opening brace is on the same line as the function declaration
+        const hasOpenBraceOnSameLine = line.includes('{');
         this.nextLine();
-        const body = this.parseFunctionBody();
+        const body = this.parseFunctionBody(hasOpenBraceOnSameLine);
         
         return {
             type: 'Function',
@@ -255,14 +514,15 @@ export class DroolsParser {
         return parameters;
     }
 
-    private parseFunctionBody(): string {
+    private parseFunctionBody(hasOpenBraceOnSameLine: boolean = false): string {
         let body = '';
-        let braceCount = 0;
-        let foundOpenBrace = false;
+        let braceCount = hasOpenBraceOnSameLine ? 1 : 0; // Start with 1 if opening brace was on declaration line
+        let foundOpenBrace = hasOpenBraceOnSameLine;
         
         while (this.currentLine < this.lines.length) {
             const line = this.getCurrentLine();
             
+            // Count braces in this line
             for (const char of line) {
                 if (char === '{') {
                     braceCount++;
@@ -275,6 +535,7 @@ export class DroolsParser {
             body += line + '\n';
             this.nextLine();
             
+            // Check if we've completed the function body
             if (foundOpenBrace && braceCount === 0) {
                 break;
             }
@@ -635,10 +896,74 @@ export class DroolsParser {
     }
 
     private addError(message: string, position: Position, severity: 'error' | 'warning' = 'error'): void {
+        // Limit the number of errors to prevent overwhelming output
+        if (this.errors.length >= this.maxErrors) {
+            return;
+        }
+        
         this.errors.push({
             message,
             range: { start: position, end: position },
             severity
         });
+    }
+
+    /**
+     * Create a minimal AST when parsing fails completely
+     */
+    private createMinimalAST(): DroolsAST {
+        const start = this.getCurrentPosition();
+        return {
+            type: 'DroolsFile',
+            range: { start, end: start },
+            packageDeclaration: undefined,
+            imports: [],
+            globals: [],
+            functions: [],
+            rules: [],
+            queries: [],
+            declares: []
+        };
+    }
+
+    /**
+     * Attempt to recover from parsing errors by skipping to the next known construct
+     */
+    private recoverFromError(): void {
+        this.recoveryMode = true;
+        
+        // Skip lines until we find a known construct or reach end of file
+        while (this.currentLine < this.lines.length) {
+            const line = this.getCurrentLine().trim();
+            
+            // Look for known starting keywords
+            if (line.startsWith('package ') || 
+                line.startsWith('import ') || 
+                line.startsWith('global ') || 
+                line.startsWith('function ') || 
+                line.startsWith('rule ') || 
+                line.startsWith('query ') || 
+                line.startsWith('declare ') ||
+                line === 'end') {
+                break;
+            }
+            
+            this.nextLine();
+        }
+        
+        this.recoveryMode = false;
+    }
+
+    /**
+     * Enhanced parsing methods with error recovery
+     */
+    private parseWithRecovery<T>(parseMethod: () => T, defaultValue: T, errorMessage: string): T {
+        try {
+            return parseMethod();
+        } catch (error) {
+            this.addError(`${errorMessage}: ${error}`, this.getCurrentPosition(), 'error');
+            this.recoverFromError();
+            return defaultValue;
+        }
     }
 }

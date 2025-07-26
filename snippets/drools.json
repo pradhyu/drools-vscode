@@ -1,0 +1,252 @@
+{
+  "Basic Rule": {
+    "prefix": "rule",
+    "body": [
+      "rule \"${1:RuleName}\"",
+      "when",
+      "\t${2:// Add conditions here}",
+      "then",
+      "\t${3:// Add actions here}",
+      "end"
+    ],
+    "description": "Basic Drools rule template"
+  },
+  
+  "Rule with Salience": {
+    "prefix": "rule-salience",
+    "body": [
+      "rule \"${1:RuleName}\"",
+      "\tsalience ${2:100}",
+      "when",
+      "\t${3:// Add conditions here}",
+      "then",
+      "\t${4:// Add actions here}",
+      "end"
+    ],
+    "description": "Drools rule with salience attribute"
+  },
+  
+  "Conditional Rule": {
+    "prefix": "rule-condition",
+    "body": [
+      "rule \"${1:RuleName}\"",
+      "when",
+      "\t${2:FactType}(${3:property} ${4|==,!=,>,<,>=,<=|} ${5:value})",
+      "then",
+      "\t${6:// Add actions here}",
+      "end"
+    ],
+    "description": "Rule with conditional pattern matching"
+  },
+  
+  "Rule with Multiple Conditions": {
+    "prefix": "rule-multi",
+    "body": [
+      "rule \"${1:RuleName}\"",
+      "when",
+      "\t${2:FactType1}(${3:property1} ${4|==,!=,>,<,>=,<=|} ${5:value1})",
+      "\t${6:FactType2}(${7:property2} ${8|==,!=,>,<,>=,<=|} ${9:value2})",
+      "then",
+      "\t${10:// Add actions here}",
+      "end"
+    ],
+    "description": "Rule with multiple conditions"
+  },
+  
+  "Rule with Variable Binding": {
+    "prefix": "rule-bind",
+    "body": [
+      "rule \"${1:RuleName}\"",
+      "when",
+      "\t$${2:var} : ${3:FactType}(${4:property} ${5|==,!=,>,<,>=,<=|} ${6:value})",
+      "then",
+      "\t${7:// Use $}${2:var}${7: in actions}",
+      "end"
+    ],
+    "description": "Rule with variable binding"
+  },
+  
+  "Rule with Exists": {
+    "prefix": "rule-exists",
+    "body": [
+      "rule \"${1:RuleName}\"",
+      "when",
+      "\texists(${2:FactType}(${3:property} ${4|==,!=,>,<,>=,<=|} ${5:value}))",
+      "then",
+      "\t${6:// Add actions here}",
+      "end"
+    ],
+    "description": "Rule with exists condition"
+  },
+  
+  "Rule with Not": {
+    "prefix": "rule-not",
+    "body": [
+      "rule \"${1:RuleName}\"",
+      "when",
+      "\tnot(${2:FactType}(${3:property} ${4|==,!=,>,<,>=,<=|} ${5:value}))",
+      "then",
+      "\t${6:// Add actions here}",
+      "end"
+    ],
+    "description": "Rule with not condition"
+  },
+  
+  "Function Definition": {
+    "prefix": "function",
+    "body": [
+      "function ${1:returnType} ${2:functionName}(${3:parameters}) {",
+      "\t${4:// Function body}",
+      "\treturn ${5:value};",
+      "}"
+    ],
+    "description": "Drools function definition"
+  },
+  
+  "Function with No Return": {
+    "prefix": "function-void",
+    "body": [
+      "function void ${1:functionName}(${2:parameters}) {",
+      "\t${3:// Function body}",
+      "}"
+    ],
+    "description": "Void function definition"
+  },
+  
+  "Package Declaration": {
+    "prefix": "package",
+    "body": [
+      "package ${1:com.example.rules};"
+    ],
+    "description": "Package declaration"
+  },
+  
+  "Import Statement": {
+    "prefix": "import",
+    "body": [
+      "import ${1:com.example.FactType};"
+    ],
+    "description": "Import statement"
+  },
+  
+  "Import Function": {
+    "prefix": "import-function",
+    "body": [
+      "import function ${1:com.example.Utils.functionName};"
+    ],
+    "description": "Import function statement"
+  },
+  
+  "Global Declaration": {
+    "prefix": "global",
+    "body": [
+      "global ${1:Type} ${2:variableName};"
+    ],
+    "description": "Global variable declaration"
+  },
+  
+  "Query Definition": {
+    "prefix": "query",
+    "body": [
+      "query ${1:queryName}(${2:parameters})",
+      "\t${3:// Query conditions}",
+      "end"
+    ],
+    "description": "Query definition"
+  },
+  
+  "Rule with Eval": {
+    "prefix": "rule-eval",
+    "body": [
+      "rule \"${1:RuleName}\"",
+      "when",
+      "\teval(${2:condition})",
+      "then",
+      "\t${3:// Add actions here}",
+      "end"
+    ],
+    "description": "Rule with eval condition"
+  },
+  
+  "Rule with Accumulate": {
+    "prefix": "rule-accumulate",
+    "body": [
+      "rule \"${1:RuleName}\"",
+      "when",
+      "\t$${2:result} : ${3:Number}() from accumulate(",
+      "\t\t$${4:item} : ${5:FactType}(${6:condition}),",
+      "\t\t${7|sum,count,min,max,average|}($${4:item}.${8:property})",
+      "\t)",
+      "then",
+      "\t${9:// Use $}${2:result}${9: in actions}",
+      "end"
+    ],
+    "description": "Rule with accumulate function"
+  },
+  
+  "Rule with Collect": {
+    "prefix": "rule-collect",
+    "body": [
+      "rule \"${1:RuleName}\"",
+      "when",
+      "\t$${2:list} : List() from collect(",
+      "\t\t${3:FactType}(${4:condition})",
+      "\t)",
+      "then",
+      "\t${5:// Use $}${2:list}${5: in actions}",
+      "end"
+    ],
+    "description": "Rule with collect function"
+  },
+  
+  "Insert Action": {
+    "prefix": "insert",
+    "body": [
+      "insert(new ${1:FactType}(${2:parameters}));"
+    ],
+    "description": "Insert action"
+  },
+  
+  "Update Action": {
+    "prefix": "update",
+    "body": [
+      "update($${1:variable});"
+    ],
+    "description": "Update action"
+  },
+  
+  "Modify Action": {
+    "prefix": "modify",
+    "body": [
+      "modify($${1:variable}) {",
+      "\t${2:property} = ${3:value}",
+      "}"
+    ],
+    "description": "Modify action"
+  },
+  
+  "Retract Action": {
+    "prefix": "retract",
+    "body": [
+      "retract($${1:variable});"
+    ],
+    "description": "Retract action"
+  },
+  
+  "Complete Rule File": {
+    "prefix": "drl-file",
+    "body": [
+      "package ${1:com.example.rules};",
+      "",
+      "import ${2:com.example.FactType};",
+      "",
+      "rule \"${3:RuleName}\"",
+      "when",
+      "\t${4:// Add conditions here}",
+      "then",
+      "\t${5:// Add actions here}",
+      "end"
+    ],
+    "description": "Complete .drl file template"
+  }
+}

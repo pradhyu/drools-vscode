@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="64" cy="64" r="60" fill="#2E7D32" stroke="#1B5E20" stroke-width="2"/>
+  
+  <!-- Drools logo elements -->
+  <!-- Rule symbol -->
+  <rect x="20" y="30" width="88" height="8" rx="4" fill="#FFFFFF"/>
+  <rect x="20" y="45" width="60" height="6" rx="3" fill="#C8E6C9"/>
+  <rect x="20" y="55" width="70" height="6" rx="3" fill="#C8E6C9"/>
+  
+  <!-- Arrow indicating flow -->
+  <path d="M85 45 L95 50 L85 55 Z" fill="#FFFFFF"/>
+  
+  <!-- Action block -->
+  <rect x="20" y="70" width="88" height="8" rx="4" fill="#FFFFFF"/>
+  <rect x="20" y="85" width="50" height="6" rx="3" fill="#C8E6C9"/>
+  <rect x="20" y="95" width="65" height="6" rx="3" fill="#C8E6C9"/>
+  
+  <!-- Gear icon to represent business rules -->
+  <circle cx="95" cy="85" r="12" fill="none" stroke="#FFFFFF" stroke-width="2"/>
+  <circle cx="95" cy="85" r="6" fill="#FFFFFF"/>
+  <path d="M95 73 L97 75 L95 77 L93 75 Z" fill="#FFFFFF"/>
+  <path d="M95 93 L97 95 L95 97 L93 95 Z" fill="#FFFFFF"/>
+  <path d="M107 85 L105 87 L103 85 L105 83 Z" fill="#FFFFFF"/>
+  <path d="M87 85 L85 87 L83 85 L85 83 Z" fill="#FFFFFF"/>
+</svg>
