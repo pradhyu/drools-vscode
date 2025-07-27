@@ -110,7 +110,7 @@
   - Add debouncing for expensive operations like parsing and validation
   - _Requirements: Performance aspects of all requirements_
 
-- [ ] 17. Package and prepare extension for distribution
+- [-] 17. Package and prepare extension for distribution
   - Configure extension packaging with proper metadata and icons
   - Create README documentation with feature descriptions and usage examples
   - Set up automated build and release pipeline
