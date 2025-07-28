@@ -168,6 +168,9 @@ code --install-extension drools-community.drools-vscode-extension
 2. The extension will automatically activate and provide language support
 3. Start typing Drools code to see syntax highlighting and completion suggestions
 
+![Getting Started](images/screenshots/getting-started.gif)
+*Quick start guide showing extension activation and first steps*
+
 ### Example Drools File
 
 ```drools

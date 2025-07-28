@@ -52,6 +52,18 @@ This directory contains visual assets for the extension README. Below are the re
 - **Duration**: 10-12 seconds
 - **Size**: 800x600px
 
+### 9. installation-demo.gif
+- **Purpose**: Show extension installation process
+- **Content**: Opening extensions view, searching, installing the extension
+- **Duration**: 8-10 seconds
+- **Size**: 800x600px
+
+### 10. getting-started.gif
+- **Purpose**: Show first-time user experience
+- **Content**: Opening a .drl file, extension activation, basic features
+- **Duration**: 10-12 seconds
+- **Size**: 800x600px
+
 ## Required Static Images (PNG/JPG)
 
 ### 1. syntax-examples.png
