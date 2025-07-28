@@ -3,63 +3,162 @@
 [![Version](https://img.shields.io/visual-studio-marketplace/v/drools-community.drools-vscode-extension)](https://marketplace.visualstudio.com/items?itemName=drools-community.drools-vscode-extension)
 [![Downloads](https://img.shields.io/visual-studio-marketplace/d/drools-community.drools-vscode-extension)](https://marketplace.visualstudio.com/items?itemName=drools-community.drools-vscode-extension)
 [![Rating](https://img.shields.io/visual-studio-marketplace/r/drools-community.drools-vscode-extension)](https://marketplace.visualstudio.com/items?itemName=drools-community.drools-vscode-extension)
+[![Build Status](https://github.com/drools-community/drools-vscode-extension/workflows/CI/badge.svg)](https://github.com/drools-community/drools-vscode-extension/actions)
 
-A comprehensive Visual Studio Code extension that provides full language support for Drools Rule Language (.drl) files. This extension enhances your development experience with syntax highlighting, IntelliSense, error detection, formatting, and many other productivity features.
+Transform your Drools development experience with comprehensive language support for Visual Studio Code! This extension brings professional-grade tooling to Drools Rule Language (.drl) files, featuring intelligent code completion, real-time error detection, advanced formatting, and much more.
 
-## Features
+![Drools Extension Overview](images/screenshots/overview.gif)
+*Experience the power of intelligent Drools development*
 
-### 🎨 Syntax Highlighting
-- Rich syntax highlighting for all Drools language constructs
-- Distinct colors for keywords, strings, comments, and operators
-- Support for rule declarations, conditions, and actions
-- Highlighting for package declarations, imports, and function definitions
+## ✨ Features
 
-### 🧠 IntelliSense & Code Completion
-- Smart keyword completion for Drools language constructs
-- Context-aware suggestions based on cursor position
-- Fact type and property completion
-- Function signature help and parameter hints
-- Import statement suggestions
+### 🎨 Rich Syntax Highlighting
 
-### 🔍 Error Detection & Validation
-- Real-time syntax error detection with red squiggles
-- Missing semicolon and bracket validation
-- Undefined variable and fact warnings
-- Helpful error messages on hover
-- Best practice violation warnings
+Experience beautiful, semantic syntax highlighting that makes your Drools code easy to read and understand.
 
-### ✨ Code Formatting
-- Automatic document formatting with proper indentation
-- Format-on-save functionality
-- Range formatting for selected text
-- Consistent spacing around operators and keywords
-- Configurable formatting preferences
+![Syntax Highlighting Demo](images/screenshots/syntax-highlighting.gif)
+*Rich syntax highlighting with distinct colors for keywords, strings, comments, and operators*
 
-### 📁 Code Navigation
-- Bracket matching and highlighting
-- Code folding for rules, functions, and comment blocks
-- Document outline with symbol navigation
-- Go-to-definition for rules and functions
-- Workspace-wide symbol search
+**Key Highlights:**
+- **Keywords**: `rule`, `when`, `then`, `end`, `function`, `import`, `package`
+- **Operators**: `==`, `!=`, `&&`, `||`, `matches`, `contains`, `memberOf`
+- **Fact Patterns**: Variable bindings, constraints, and field access
+- **Comments**: Single-line (`//`) and multi-line (`/* */`) comments
+- **Strings & Numbers**: Proper highlighting for literals and expressions
 
-### 📝 Code Snippets
-- Pre-built snippets for common Drools patterns
-- Basic rule templates with tab stops
-- Function definition templates
-- Import and package declaration snippets
-- Custom snippet management
+![Syntax Highlighting Examples](images/screenshots/syntax-examples.png)
+*Examples of syntax highlighting across different Drools constructs*
+
+### 🧠 Intelligent Code Completion
+
+Get smart, context-aware suggestions as you type, making Drools development faster and more accurate.
+
+![Code Completion Demo](images/screenshots/completion-demo.gif)
+*IntelliSense in action with keyword and context-aware suggestions*
+
+**Completion Features:**
+- **Keyword Completion**: Automatic suggestions for Drools keywords based on context
+- **Fact Type Completion**: Smart completion for declared fact types and imported classes
+- **Function Completion**: Function names with signature hints and parameter information
+- **Variable Completion**: Variables from `when` clauses available in `then` sections
+- **Import Suggestions**: Auto-complete for Java class imports
+
+![Completion Types](images/screenshots/completion-types.png)
+*Different types of completions: keywords, fact types, functions, and variables*
+
+### 🔍 Real-time Error Detection & Validation
+
+Catch errors as you type with comprehensive syntax and semantic validation.
+
+![Error Detection Demo](images/screenshots/error-detection.gif)
+*Real-time error detection with helpful error messages and quick fixes*
+
+**Validation Features:**
+- **Syntax Errors**: Missing semicolons, unmatched brackets, malformed rules
+- **Semantic Errors**: Undefined variables, type mismatches, duplicate rule names
+- **Best Practices**: Warnings for unused variables, missing salience, complex conditions
+- **Hover Information**: Detailed error descriptions and suggested fixes
+
+![Error Examples](images/screenshots/error-examples.png)
+*Examples of different error types with clear, actionable messages*
+
+### ✨ Advanced Code Formatting
+
+Keep your Drools code clean and consistent with powerful formatting capabilities.
+
+![Formatting Demo](images/screenshots/formatting-demo.gif)
+*Automatic code formatting with customizable style preferences*
+
+**Formatting Features:**
+- **Auto-Format on Save**: Automatically format files when saving
+- **Range Formatting**: Format selected code blocks
+- **Configurable Indentation**: Spaces or tabs with customizable size
+- **Operator Spacing**: Consistent spacing around operators and keywords
+- **Rule Block Alignment**: Properly aligned `when` and `then` clauses
+
+![Before After Formatting](images/screenshots/formatting-before-after.png)
+*Before and after formatting comparison*
+
+### 📁 Smart Code Navigation
+
+Navigate your Drools codebase efficiently with advanced navigation features.
+
+![Navigation Demo](images/screenshots/navigation-demo.gif)
+*Code navigation with outline, folding, and go-to-definition*
+
+**Navigation Features:**
+- **Document Outline**: Hierarchical view of rules, functions, and declarations
+- **Code Folding**: Collapse rules, functions, and comment blocks
+- **Bracket Matching**: Highlight matching brackets and parentheses
+- **Go-to-Definition**: Jump to rule and function definitions
+- **Symbol Search**: Find symbols across your workspace
+
+![Navigation Features](images/screenshots/navigation-features.png)
+*Document outline and symbol navigation in action*
+
+### 📝 Powerful Code Snippets
+
+Accelerate development with pre-built snippets for common Drools patterns.
+
+![Snippets Demo](images/screenshots/snippets-demo.gif)
+*Code snippets with tab stops for rapid development*
+
+**Available Snippets:**
+- **`rule`** - Complete rule template with placeholders
+- **`function`** - Function definition with parameters
+- **`import`** - Import statement template
+- **`package`** - Package declaration
+- **`global`** - Global variable declaration
+- **`query`** - Query definition template
+- **`when`** - When clause with common patterns
+- **`then`** - Then clause with typical actions
+
+![Snippet Gallery](images/screenshots/snippet-gallery.png)
+*Gallery of available code snippets*
+
+### 🔧 Comprehensive Configuration
+
+Customize the extension to match your development preferences and team standards.
+
+![Settings Demo](images/screenshots/settings-demo.gif)
+*Configurable settings for formatting, completion, and validation*
+
+**Configuration Categories:**
+- **Features**: Enable/disable syntax highlighting, completion, diagnostics
+- **Completion**: Keyword completion, fact types, functions, max items
+- **Diagnostics**: Syntax validation, semantic validation, best practices
+- **Formatting**: Format on save, indentation, spacing preferences
+- **Snippets**: Built-in snippets, custom snippets, trigger characters
+- **Performance**: Caching, debouncing, large file handling
+
+![Settings Panel](images/screenshots/settings-panel.png)
+*Extension settings panel with all configuration options*
 
 ## Installation
+
+### From VS Code Marketplace
 
 1. Open Visual Studio Code
 2. Go to the Extensions view (`Ctrl+Shift+X` or `Cmd+Shift+X`)
 3. Search for "Drools Language Support"
 4. Click Install
 
-Alternatively, you can install from the command line:
+![Installation Demo](images/screenshots/installation-demo.gif)
+*Installing the extension from VS Code Marketplace*
+
+### From Command Line
+
 ```bash
 code --install-extension drools-community.drools-vscode-extension
 ```
+
+### Manual Installation
+
+1. Download the latest `.vsix` file from [GitHub Releases](https://github.com/drools-community/drools-vscode-extension/releases)
+2. Open VS Code
+3. Press `Ctrl+Shift+P` (or `Cmd+Shift+P` on Mac)
+4. Type "Extensions: Install from VSIX"
+5. Select the downloaded `.vsix` file
 
 ## Usage
 
