@@ -17,11 +17,7 @@
   "bugs": {
     "url": "https://github.com/drools-community/drools-vscode-extension/issues"
   },
-  "icon": "images/icon.png",
-  "galleryBanner": {
-    "color": "#2E7D32",
-    "theme": "dark"
-  },
+
   "engines": {
     "vscode": "^1.74.0"
   },

@@ -241,7 +241,6 @@ This extension is licensed under the [Apache License 2.0](LICENSE).
 
 - Thanks to the Drools community for feedback and contributions
 - Built with the VS Code Extension API and Language Server Protocol
-- Icons and graphics designed specifically for this extension
 
 ---
 

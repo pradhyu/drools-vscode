@@ -158,12 +158,11 @@ class ExtensionInstallationTester {
             this.log(`Found contributes section: ${contrib}`, 'success');
         }
 
-        // Check icon exists
+        // Check that no icon is configured (as per requirements)
         if (this.packageJson.icon) {
-            if (!fs.existsSync(this.packageJson.icon)) {
-                throw new Error(`Icon file not found: ${this.packageJson.icon}`);
-            }
-            this.log(`Icon file found: ${this.packageJson.icon}`, 'success');
+            this.log('Warning: Icon is configured but should be removed per requirements', 'warning');
+        } else {
+            this.log('No icon configured (as required)', 'success');
         }
 
         this.log('Extension metadata verified successfully', 'success');
@@ -219,11 +218,9 @@ class ExtensionInstallationTester {
     async testBuildOutput() {
         this.log('=== Testing Build Output ===');
 
-        // Check compiled JavaScript files
+        // Check compiled JavaScript files (webpack bundles everything into extension.js)
         const requiredOutputFiles = [
-            'out/extension.js',
-            'out/server/server.js',
-            'out/server/parser/droolsParser.js'
+            'out/extension.js'
         ];
 
         for (const file of requiredOutputFiles) {
@@ -236,7 +233,17 @@ class ExtensionInstallationTester {
                 throw new Error(`Output file is empty: ${file}`);
             }
             
+            // Check that the bundled file contains expected components
+            if (!content.includes('activate') || !content.includes('deactivate')) {
+                throw new Error('Extension entry points not found in bundled output');
+            }
+            
             this.log(`Build output verified: ${file}`, 'success');
+        }
+
+        // Check source map exists
+        if (fs.existsSync('out/extension.js.map')) {
+            this.log('Source map found: out/extension.js.map', 'success');
         }
     }
 
