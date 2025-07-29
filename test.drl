@@ -4,7 +4,8 @@ import com.example.Person
 
 rule "Adult Check"
     when
-        $person : Person(age >= 18)
+        $person : Person(age >= 18
+        )
     then
         System.out.println("Person is an adult: " + $person.getName());
 end

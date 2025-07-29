@@ -14,7 +14,7 @@ import {
     ParameterInformation
 } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
-import { DroolsAST, RuleNode, FunctionNode, GlobalNode } from '../parser/ast';
+import { DroolsAST, RuleNode, FunctionNode, GlobalNode, MultiLinePatternNode, ConditionNode } from '../parser/ast';
 import { ParseResult } from '../parser/droolsParser';
 
 export interface CompletionSettings {
@@ -32,6 +32,21 @@ export interface CompletionContext {
     scope: 'global' | 'rule' | 'when' | 'then' | 'function';
     ruleContext?: RuleNode;
     functionContext?: FunctionNode;
+    multiLinePattern?: MultiLinePatternContext;
+    parenthesesDepth: number;
+    nestedLevel: number;
+}
+
+export interface MultiLinePatternContext {
+    type: 'exists' | 'not' | 'eval' | 'forall' | 'collect' | 'accumulate';
+    keyword: string;
+    startPosition: Position;
+    endPosition?: Position;
+    content: string;
+    isComplete: boolean;
+    depth: number;
+    parentPattern?: MultiLinePatternContext;
+    nestedPatterns: MultiLinePatternContext[];
 }
 
 export class DroolsCompletionProvider {
@@ -96,7 +111,7 @@ export class DroolsCompletionProvider {
 
         // Add fact type completions
         if (this.settings.enableFactTypeCompletion) {
-            completions.push(...this.getFactTypeCompletions(context));
+            completions.push(...this.getEnhancedFactTypeCompletions(context));
         }
 
         // Add function completions
@@ -110,7 +125,7 @@ export class DroolsCompletionProvider {
         }
 
         // Add operator completions
-        completions.push(...this.getOperatorCompletions(context));
+        completions.push(...this.getEnhancedOperatorCompletions(context));
 
         // Add snippet completions
         completions.push(...this.getSnippetCompletions(context));
@@ -139,13 +154,22 @@ export class DroolsCompletionProvider {
         const ruleContext = this.findRuleContext(position);
         const functionContext = this.findFunctionContext(position);
 
+        // Detect multi-line pattern context
+        const multiLinePattern = this.detectMultiLinePatternContext(position);
+        
+        // Calculate parentheses depth and nesting level
+        const { parenthesesDepth, nestedLevel } = this.calculateNestingInfo(position, multiLinePattern);
+
         return {
             position,
             triggerCharacter,
             currentToken,
             scope,
             ruleContext,
-            functionContext
+            functionContext,
+            multiLinePattern,
+            parenthesesDepth,
+            nestedLevel
         };
     }
 
@@ -214,7 +238,7 @@ export class DroolsCompletionProvider {
     private getKeywordCompletions(context: CompletionContext): CompletionItem[] {
         const completions: CompletionItem[] = [];
 
-        // Filter keywords based on scope
+        // Filter keywords based on scope and multi-line pattern context
         let relevantKeywords: string[] = [];
 
         switch (context.scope) {
@@ -227,8 +251,14 @@ export class DroolsCompletionProvider {
                                   'date-effective', 'date-expires', 'enabled', 'dialect', 'duration', 'timer'];
                 break;
             case 'when':
-                relevantKeywords = ['exists', 'not', 'and', 'or', 'eval', 'forall', 'accumulate', 
-                                  'collect', 'from', 'entry-point', 'then'];
+                if (context.multiLinePattern) {
+                    // Inside multi-line pattern - provide context-aware keywords
+                    relevantKeywords = this.getMultiLinePatternKeywords(context.multiLinePattern, context.parenthesesDepth);
+                } else {
+                    // Regular when clause keywords
+                    relevantKeywords = ['exists', 'not', 'and', 'or', 'eval', 'forall', 'accumulate', 
+                                      'collect', 'from', 'entry-point', 'then'];
+                }
                 break;
             case 'then':
                 relevantKeywords = ['insert', 'update', 'modify', 'delete', 'retract', 'insertLogical', 'end'];
@@ -240,62 +270,31 @@ export class DroolsCompletionProvider {
 
         for (const keyword of relevantKeywords) {
             if (keyword.startsWith(context.currentToken.toLowerCase())) {
-                completions.push({
+                const completion: CompletionItem = {
                     label: keyword,
                     kind: CompletionItemKind.Keyword,
-                    detail: `Drools keyword`,
+                    detail: context.multiLinePattern ? 
+                        `Drools keyword (in ${context.multiLinePattern.keyword} pattern)` : 
+                        `Drools keyword`,
                     documentation: this.getKeywordDocumentation(keyword),
                     insertText: keyword,
                     sortText: `0_${keyword}` // Prioritize keywords
-                });
+                };
+
+                // Add special handling for multi-line pattern keywords
+                if (context.multiLinePattern && this.isMultiLinePatternKeyword(keyword)) {
+                    completion.insertText = this.getMultiLinePatternInsertText(keyword, context);
+                    completion.insertTextFormat = InsertTextFormat.Snippet;
+                }
+
+                completions.push(completion);
             }
         }
 
         return completions;
     }
 
-    /**
-     * Get fact type completions
-     */
-    private getFactTypeCompletions(context: CompletionContext): CompletionItem[] {
-        const completions: CompletionItem[] = [];
 
-        // Only provide fact types in when clauses or after certain keywords
-        if (context.scope !== 'when' && context.scope !== 'then') {
-            return completions;
-        }
-
-        // Add common Java types
-        for (const factType of this.COMMON_FACT_TYPES) {
-            if (factType.toLowerCase().startsWith(context.currentToken.toLowerCase())) {
-                completions.push({
-                    label: factType,
-                    kind: CompletionItemKind.Class,
-                    detail: `Java type`,
-                    documentation: `Common Java/Drools fact type: ${factType}`,
-                    insertText: factType,
-                    sortText: `1_${factType}`
-                });
-            }
-        }
-
-        // Add custom fact types from imports (simplified - would need better import analysis)
-        for (const importNode of this.ast.imports) {
-            const className = importNode.path.split('.').pop();
-            if (className && className.toLowerCase().startsWith(context.currentToken.toLowerCase())) {
-                completions.push({
-                    label: className,
-                    kind: CompletionItemKind.Class,
-                    detail: `Imported type from ${importNode.path}`,
-                    documentation: `Imported fact type: ${className}`,
-                    insertText: className,
-                    sortText: `1_${className}`
-                });
-            }
-        }
-
-        return completions;
-    }
 
     /**
      * Get function completions
@@ -393,32 +392,7 @@ export class DroolsCompletionProvider {
         return completions;
     }
 
-    /**
-     * Get operator completions
-     */
-    private getOperatorCompletions(context: CompletionContext): CompletionItem[] {
-        const completions: CompletionItem[] = [];
 
-        // Only provide operators in when and then clauses
-        if (context.scope !== 'when' && context.scope !== 'then') {
-            return completions;
-        }
-
-        for (const operator of this.OPERATORS) {
-            if (operator.toLowerCase().startsWith(context.currentToken.toLowerCase())) {
-                completions.push({
-                    label: operator,
-                    kind: CompletionItemKind.Operator,
-                    detail: `Drools operator`,
-                    documentation: this.getOperatorDocumentation(operator),
-                    insertText: operator,
-                    sortText: `4_${operator}`
-                });
-            }
-        }
-
-        return completions;
-    }
 
     /**
      * Get snippet completions for common patterns
@@ -467,14 +441,66 @@ export class DroolsCompletionProvider {
                 }
 
                 if ('exists'.startsWith(context.currentToken.toLowerCase())) {
+                    const indentation = this.getIndentationForContext(context);
                     completions.push({
                         label: 'exists',
                         kind: CompletionItemKind.Snippet,
-                        detail: 'Exists condition',
-                        documentation: 'Creates an exists condition',
-                        insertText: 'exists(${1:FactType}(${2:constraints}))',
+                        detail: 'Multi-line exists condition',
+                        documentation: 'Creates a multi-line exists condition',
+                        insertText: `exists(\n${indentation}\t\${1:FactType}(\${2:constraints})\n${indentation})`,
                         insertTextFormat: InsertTextFormat.Snippet,
                         sortText: '0_exists_snippet'
+                    });
+                }
+
+                if ('not'.startsWith(context.currentToken.toLowerCase())) {
+                    const indentation = this.getIndentationForContext(context);
+                    completions.push({
+                        label: 'not',
+                        kind: CompletionItemKind.Snippet,
+                        detail: 'Multi-line not condition',
+                        documentation: 'Creates a multi-line not condition',
+                        insertText: `not(\n${indentation}\t\${1:FactType}(\${2:constraints})\n${indentation})`,
+                        insertTextFormat: InsertTextFormat.Snippet,
+                        sortText: '0_not_snippet'
+                    });
+                }
+
+                if ('eval'.startsWith(context.currentToken.toLowerCase())) {
+                    completions.push({
+                        label: 'eval',
+                        kind: CompletionItemKind.Snippet,
+                        detail: 'Multi-line eval condition',
+                        documentation: 'Creates a multi-line eval condition',
+                        insertText: 'eval(\n\t${1:boolean_expression}\n)',
+                        insertTextFormat: InsertTextFormat.Snippet,
+                        sortText: '0_eval_snippet'
+                    });
+                }
+
+                if ('forall'.startsWith(context.currentToken.toLowerCase())) {
+                    const indentation = this.getIndentationForContext(context);
+                    completions.push({
+                        label: 'forall',
+                        kind: CompletionItemKind.Snippet,
+                        detail: 'Multi-line forall condition',
+                        documentation: 'Creates a multi-line forall condition',
+                        insertText: `forall(\n${indentation}\t\${1:FactType}(\${2:constraints})\n${indentation})`,
+                        insertTextFormat: InsertTextFormat.Snippet,
+                        sortText: '0_forall_snippet'
+                    });
+                }
+
+                if ('accumulate'.startsWith(context.currentToken.toLowerCase())) {
+                    const indentation = this.getIndentationForContext(context);
+                    completions.push({
+                        label: 'accumulate',
+                        kind: CompletionItemKind.Snippet,
+                        detail: 'Multi-line accumulate condition',
+                        documentation: 'Creates a multi-line accumulate condition',
+                        insertText: `accumulate(\n${indentation}\t\${1:FactType}(\${2:constraints}),\n${indentation}\t\${3:accumulate_function}\n${indentation})`,
+                        insertTextFormat: InsertTextFormat.Snippet,
+                        sortText: '0_accumulate_snippet'
                     });
                 }
                 break;
@@ -657,6 +683,428 @@ export class DroolsCompletionProvider {
             activeSignature: 0,
             activeParameter: Math.min(activeParameter, parameters.length - 1)
         };
+    }
+
+    /**
+     * Detect multi-line pattern context at the given position
+     */
+    private detectMultiLinePatternContext(position: Position): MultiLinePatternContext | undefined {
+        // Get text from start of document to current position to analyze context
+        const textToPosition = this.document.getText({
+            start: { line: 0, character: 0 },
+            end: position
+        });
+
+        // Find the current rule context first
+        const ruleContext = this.findRuleContext(position);
+        if (!ruleContext || !ruleContext.when) {
+            return undefined;
+        }
+
+        // Look for multi-line patterns in the current rule's when clause
+        for (const condition of ruleContext.when.conditions) {
+            if (condition.multiLinePattern && this.isPositionInMultiLinePattern(position, condition.multiLinePattern)) {
+                return this.convertToMultiLinePatternContext(condition.multiLinePattern, condition);
+            }
+        }
+
+        // If not found in AST, try to detect from text analysis
+        return this.detectMultiLinePatternFromText(textToPosition, position);
+    }
+
+    /**
+     * Check if position is within a multi-line pattern
+     */
+    private isPositionInMultiLinePattern(position: Position, pattern: MultiLinePatternNode): boolean {
+        return this.isPositionInRange(position, pattern.range);
+    }
+
+    /**
+     * Convert AST MultiLinePatternNode to completion context
+     */
+    private convertToMultiLinePatternContext(pattern: MultiLinePatternNode, condition: ConditionNode): MultiLinePatternContext {
+        return {
+            type: pattern.patternType,
+            keyword: pattern.keyword,
+            startPosition: pattern.range.start,
+            endPosition: pattern.range.end,
+            content: pattern.content,
+            isComplete: pattern.isComplete,
+            depth: pattern.depth,
+            nestedPatterns: pattern.nestedPatterns.map(nested => this.convertToMultiLinePatternContext(nested, condition))
+        };
+    }
+
+    /**
+     * Detect multi-line pattern from text analysis when AST doesn't have it
+     */
+    private detectMultiLinePatternFromText(text: string, position: Position): MultiLinePatternContext | undefined {
+        const lines = text.split('\n');
+        const currentLineIndex = position.line;
+        
+        // Look backwards from current position to find pattern start
+        for (let i = currentLineIndex; i >= 0; i--) {
+            const line = lines[i];
+            const patternMatch = line.match(/\b(exists|not|eval|forall|collect|accumulate)\s*\(/);
+            
+            if (patternMatch) {
+                const keyword = patternMatch[1] as 'exists' | 'not' | 'eval' | 'forall' | 'collect' | 'accumulate';
+                const startColumn = patternMatch.index || 0;
+                
+                // Check if we're still within this pattern by counting parentheses
+                const contentFromPattern = this.extractContentFromPattern(lines, i, startColumn, currentLineIndex, position.character);
+                
+                if (contentFromPattern) {
+                    return {
+                        type: keyword,
+                        keyword: keyword,
+                        startPosition: { line: i, character: startColumn },
+                        content: contentFromPattern.content,
+                        isComplete: contentFromPattern.isComplete,
+                        depth: contentFromPattern.depth,
+                        nestedPatterns: []
+                    };
+                }
+            }
+        }
+        
+        return undefined;
+    }
+
+    /**
+     * Extract content from a detected pattern
+     */
+    private extractContentFromPattern(
+        lines: string[], 
+        startLine: number, 
+        startColumn: number, 
+        currentLine: number, 
+        currentColumn: number
+    ): { content: string; isComplete: boolean; depth: number } | undefined {
+        let content = '';
+        let parenthesesCount = 0;
+        let depth = 0;
+        
+        // Start from the pattern keyword
+        for (let i = startLine; i <= currentLine; i++) {
+            const line = lines[i];
+            const startChar = i === startLine ? startColumn : 0;
+            const endChar = i === currentLine ? currentColumn : line.length;
+            
+            const lineContent = line.substring(startChar, endChar);
+            content += (i > startLine ? '\n' : '') + lineContent;
+            
+            // Count parentheses to determine if we're still inside the pattern
+            for (let j = 0; j < lineContent.length; j++) {
+                const char = lineContent[j];
+                if (char === '(') {
+                    parenthesesCount++;
+                    depth = Math.max(depth, parenthesesCount);
+                } else if (char === ')') {
+                    parenthesesCount--;
+                    if (parenthesesCount < 0) {
+                        // We've gone past the pattern
+                        return undefined;
+                    }
+                }
+            }
+        }
+        
+        // If parentheses count is 0, the pattern is complete
+        // If > 0, we're still inside the pattern
+        // If < 0, we've gone past it (shouldn't happen with our logic)
+        return parenthesesCount >= 0 ? {
+            content,
+            isComplete: parenthesesCount === 0,
+            depth
+        } : undefined;
+    }
+
+    /**
+     * Calculate nesting information for the current position
+     */
+    private calculateNestingInfo(position: Position, multiLinePattern?: MultiLinePatternContext): { parenthesesDepth: number; nestedLevel: number } {
+        let parenthesesDepth = 0;
+        let nestedLevel = 0;
+        
+        if (multiLinePattern) {
+            // Count parentheses depth within the multi-line pattern
+            const textToPosition = this.document.getText({
+                start: multiLinePattern.startPosition,
+                end: position
+            });
+            
+            for (const char of textToPosition) {
+                if (char === '(') {
+                    parenthesesDepth++;
+                } else if (char === ')') {
+                    parenthesesDepth--;
+                }
+            }
+            
+            // Calculate nesting level based on pattern depth and nested patterns
+            nestedLevel = multiLinePattern.depth;
+            
+            // Add nesting from parent patterns
+            let currentPattern = multiLinePattern.parentPattern;
+            while (currentPattern) {
+                nestedLevel++;
+                currentPattern = currentPattern.parentPattern;
+            }
+        } else {
+            // Calculate basic parentheses depth from line start
+            const line = this.document.getText({
+                start: { line: position.line, character: 0 },
+                end: position
+            });
+            
+            for (const char of line) {
+                if (char === '(') {
+                    parenthesesDepth++;
+                } else if (char === ')') {
+                    parenthesesDepth--;
+                }
+            }
+        }
+        
+        return { parenthesesDepth, nestedLevel };
+    }
+
+    /**
+     * Get keywords relevant for multi-line patterns
+     */
+    private getMultiLinePatternKeywords(pattern: MultiLinePatternContext, parenthesesDepth: number): string[] {
+        const baseKeywords = ['and', 'or'];
+        
+        // Add pattern-specific keywords based on context
+        switch (pattern.type) {
+            case 'exists':
+            case 'not':
+                // Inside exists/not patterns, allow nested patterns and logical operators
+                return [...baseKeywords, 'exists', 'not', 'eval'];
+                
+            case 'eval':
+                // Inside eval patterns, focus on logical operators
+                return [...baseKeywords];
+                
+            case 'forall':
+                // Forall patterns can contain nested conditions
+                return [...baseKeywords, 'exists', 'not'];
+                
+            case 'collect':
+            case 'accumulate':
+                // Collect/accumulate patterns can have complex nested structures
+                return [...baseKeywords, 'exists', 'not', 'eval', 'from'];
+                
+            default:
+                return baseKeywords;
+        }
+    }
+
+    /**
+     * Check if a keyword is a multi-line pattern keyword
+     */
+    private isMultiLinePatternKeyword(keyword: string): boolean {
+        return ['exists', 'not', 'eval', 'forall', 'collect', 'accumulate'].includes(keyword);
+    }
+
+    /**
+     * Get insert text for multi-line pattern keywords
+     */
+    private getMultiLinePatternInsertText(keyword: string, context: CompletionContext): string {
+        const indentation = this.getIndentationForContext(context);
+        
+        switch (keyword) {
+            case 'exists':
+                return `exists(\n${indentation}\t\${1:FactType}(\${2:constraints})\n${indentation})`;
+            case 'not':
+                return `not(\n${indentation}\t\${1:FactType}(\${2:constraints})\n${indentation})`;
+            case 'eval':
+                return `eval(\${1:boolean_expression})`;
+            case 'forall':
+                return `forall(\n${indentation}\t\${1:FactType}(\${2:constraints})\n${indentation})`;
+            case 'collect':
+                return `collect(\n${indentation}\t\${1:FactType}(\${2:constraints})\n${indentation})`;
+            case 'accumulate':
+                return `accumulate(\n${indentation}\t\${1:FactType}(\${2:constraints}),\n${indentation}\t\${3:accumulate_function}\n${indentation})`;
+            default:
+                return keyword;
+        }
+    }
+
+    /**
+     * Get appropriate indentation for the current context
+     */
+    private getIndentationForContext(context: CompletionContext): string {
+        const line = this.document.getText({
+            start: { line: context.position.line, character: 0 },
+            end: { line: context.position.line, character: context.position.character }
+        });
+        
+        // Extract existing indentation
+        const indentMatch = line.match(/^(\s*)/);
+        const baseIndent = indentMatch ? indentMatch[1] : '';
+        
+        // Add extra indentation based on nesting level
+        const extraIndent = '\t'.repeat(context.nestedLevel);
+        
+        return baseIndent + extraIndent;
+    }
+
+    /**
+     * Enhanced fact type completions for multi-line patterns
+     */
+    private getEnhancedFactTypeCompletions(context: CompletionContext): CompletionItem[] {
+        const completions: CompletionItem[] = [];
+
+        // Only provide fact types in when clauses or after certain keywords
+        if (context.scope !== 'when' && context.scope !== 'then') {
+            return completions;
+        }
+
+        // Enhanced fact type suggestions for multi-line patterns
+        const factTypes = [...this.COMMON_FACT_TYPES];
+        
+        // Add context-specific fact types based on multi-line pattern
+        if (context.multiLinePattern) {
+            factTypes.push(...this.getContextSpecificFactTypes(context.multiLinePattern));
+        }
+
+        // Add imported fact types
+        for (const importNode of this.ast.imports) {
+            const className = importNode.path.split('.').pop();
+            if (className) {
+                factTypes.push(className);
+            }
+        }
+
+        for (const factType of factTypes) {
+            if (factType.toLowerCase().startsWith(context.currentToken.toLowerCase())) {
+                const completion: CompletionItem = {
+                    label: factType,
+                    kind: CompletionItemKind.Class,
+                    detail: context.multiLinePattern ? 
+                        `Fact type (in ${context.multiLinePattern.keyword} pattern)` : 
+                        `Fact type`,
+                    documentation: `Fact type: ${factType}`,
+                    insertText: this.getFactTypeInsertText(factType, context),
+                    insertTextFormat: InsertTextFormat.Snippet,
+                    sortText: `1_${factType}`
+                };
+
+                completions.push(completion);
+            }
+        }
+
+        return completions;
+    }
+
+    /**
+     * Get context-specific fact types for multi-line patterns
+     */
+    private getContextSpecificFactTypes(pattern: MultiLinePatternContext): string[] {
+        // This could be enhanced to suggest fact types based on the pattern context
+        // For now, return common domain-specific types
+        switch (pattern.type) {
+            case 'exists':
+            case 'not':
+                return ['Person', 'Account', 'Order', 'Product'];
+            case 'eval':
+                return ['Number', 'String', 'Boolean'];
+            case 'collect':
+            case 'accumulate':
+                return ['List', 'Collection', 'Set'];
+            default:
+                return [];
+        }
+    }
+
+    /**
+     * Get insert text for fact types in multi-line patterns
+     */
+    private getFactTypeInsertText(factType: string, context: CompletionContext): string {
+        if (context.multiLinePattern && context.parenthesesDepth > 0) {
+            // Inside a multi-line pattern, provide a more complete template
+            return `${factType}(\${1:constraints})`;
+        } else {
+            // Regular fact type completion
+            return `\${1:$var} : ${factType}(\${2:constraints})`;
+        }
+    }
+
+    /**
+     * Enhanced operator completions for multi-line patterns
+     */
+    private getEnhancedOperatorCompletions(context: CompletionContext): CompletionItem[] {
+        const completions: CompletionItem[] = [];
+
+        // Only provide operators in when and then clauses
+        if (context.scope !== 'when' && context.scope !== 'then') {
+            return completions;
+        }
+
+        let relevantOperators = [...this.OPERATORS];
+        
+        // Add context-specific operators for multi-line patterns
+        if (context.multiLinePattern) {
+            relevantOperators.push(...this.getMultiLinePatternOperators(context.multiLinePattern));
+        }
+
+        for (const operator of relevantOperators) {
+            if (operator.toLowerCase().startsWith(context.currentToken.toLowerCase())) {
+                const completion: CompletionItem = {
+                    label: operator,
+                    kind: CompletionItemKind.Operator,
+                    detail: context.multiLinePattern ? 
+                        `Operator (in ${context.multiLinePattern.keyword} pattern)` : 
+                        `Drools operator`,
+                    documentation: this.getOperatorDocumentation(operator),
+                    insertText: this.getOperatorInsertText(operator, context),
+                    sortText: `4_${operator}`
+                };
+
+                completions.push(completion);
+            }
+        }
+
+        return completions;
+    }
+
+    /**
+     * Get operators specific to multi-line patterns
+     */
+    private getMultiLinePatternOperators(pattern: MultiLinePatternContext): string[] {
+        switch (pattern.type) {
+            case 'eval':
+                // Eval patterns often use Java operators
+                return ['instanceof', 'new', 'this', 'super'];
+            case 'collect':
+            case 'accumulate':
+                // Collection patterns use collection operators
+                return ['size', 'isEmpty', 'contains'];
+            default:
+                return [];
+        }
+    }
+
+    /**
+     * Get insert text for operators in multi-line patterns
+     */
+    private getOperatorInsertText(operator: string, context: CompletionContext): string {
+        // For multi-line patterns, some operators might need special formatting
+        if (context.multiLinePattern) {
+            switch (operator) {
+                case 'and':
+                case 'or':
+                    // Add proper spacing and indentation for logical operators
+                    const indent = this.getIndentationForContext(context);
+                    return `${operator}\n${indent}`;
+                default:
+                    return operator;
+            }
+        }
+        
+        return operator;
     }
 
     /**

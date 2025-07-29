@@ -5,6 +5,7 @@
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { ParseResult } from '../parser/droolsParser';
 import { Diagnostic } from 'vscode-languageserver/node';
+import { MultiLinePatternMetadata, ParenthesesTracker, Position, Range } from '../parser/ast';
 
 export interface PerformanceSettings {
     enableIncrementalParsing: boolean;
@@ -13,6 +14,9 @@ export interface PerformanceSettings {
     maxCacheSize: number;
     maxFileSize: number;
     gcInterval: number;
+    maxMultiLinePatternDepth: number;
+    multiLinePatternCacheSize: number;
+    enableParenthesesCaching: boolean;
 }
 
 export interface CacheEntry<T> {
@@ -33,6 +37,18 @@ export interface DiagnosticCacheEntry extends CacheEntry<Diagnostic[]> {
     settingsHash: string;
 }
 
+export interface MultiLinePatternCacheEntry extends CacheEntry<MultiLinePatternMetadata[]> {
+    version: number;
+    contentHash: string;
+    lineRanges: { start: number; end: number }[];
+}
+
+export interface ParenthesesCacheEntry extends CacheEntry<ParenthesesTracker> {
+    version: number;
+    contentHash: string;
+    affectedLines: number[];
+}
+
 export class PerformanceManager {
     private settings: PerformanceSettings;
     
@@ -41,6 +57,10 @@ export class PerformanceManager {
     
     // Diagnostic cache
     private diagnosticCache = new Map<string, DiagnosticCacheEntry>();
+    
+    // Multi-line pattern specific caches
+    private multiLinePatternCache = new Map<string, MultiLinePatternCacheEntry>();
+    private parenthesesCache = new Map<string, ParenthesesCacheEntry>();
     
     // Debounce timers
     private debounceTimers = new Map<string, NodeJS.Timeout>();
@@ -56,7 +76,11 @@ export class PerformanceManager {
         parseTime: 0,
         diagnosticTime: 0,
         gcRuns: 0,
-        memoryFreed: 0
+        memoryFreed: 0,
+        multiLinePatternCacheHits: 0,
+        multiLinePatternCacheMisses: 0,
+        parenthesesCacheHits: 0,
+        parenthesesCacheMisses: 0
     };
 
     constructor(settings: PerformanceSettings) {
@@ -244,6 +268,229 @@ export class PerformanceManager {
     }
 
     /**
+     * Get cached multi-line patterns for incremental parsing
+     * Requirement: Add caching for multi-line pattern boundaries and metadata
+     */
+    public getCachedMultiLinePatterns(uri: string, document: TextDocument, lineRanges: { start: number; end: number }[]): MultiLinePatternMetadata[] | null {
+        if (!this.settings.enableCaching) {
+            return null;
+        }
+
+        const cached = this.multiLinePatternCache.get(uri);
+        if (!cached) {
+            this.metrics.multiLinePatternCacheMisses++;
+            return null;
+        }
+
+        // Check version and content hash
+        const contentHash = this.calculateContentHash(document.getText());
+        if (cached.version !== document.version || cached.contentHash !== contentHash) {
+            this.multiLinePatternCache.delete(uri);
+            this.totalCacheSize -= cached.size;
+            this.metrics.multiLinePatternCacheMisses++;
+            return null;
+        }
+
+        // Check if requested line ranges overlap with cached ranges
+        if (!this.rangesOverlap(lineRanges, cached.lineRanges)) {
+            this.metrics.multiLinePatternCacheMisses++;
+            return null;
+        }
+
+        // Update access statistics
+        cached.lastAccessed = Date.now();
+        cached.accessCount++;
+        this.metrics.multiLinePatternCacheHits++;
+        
+        return cached.data;
+    }
+
+    /**
+     * Cache multi-line pattern metadata for performance optimization
+     * Requirement: Add caching for multi-line pattern boundaries and metadata
+     */
+    public cacheMultiLinePatterns(
+        uri: string, 
+        document: TextDocument, 
+        patterns: MultiLinePatternMetadata[], 
+        lineRanges: { start: number; end: number }[]
+    ): void {
+        if (!this.settings.enableCaching) {
+            return;
+        }
+
+        const contentHash = this.calculateContentHash(document.getText());
+        const size = this.estimateMultiLinePatternSize(patterns);
+        
+        // Check if we need to free memory before caching
+        if (this.totalCacheSize + size > this.settings.multiLinePatternCacheSize) {
+            this.evictMultiLinePatternCache(size);
+        }
+
+        const cacheEntry: MultiLinePatternCacheEntry = {
+            data: patterns,
+            version: document.version,
+            contentHash,
+            lineRanges: [...lineRanges],
+            timestamp: Date.now(),
+            accessCount: 1,
+            lastAccessed: Date.now(),
+            size
+        };
+
+        this.multiLinePatternCache.set(uri, cacheEntry);
+        this.totalCacheSize += size;
+    }
+
+    /**
+     * Get cached parentheses tracker for optimized bracket matching
+     * Requirement: Optimize parentheses matching algorithms for better performance
+     */
+    public getCachedParenthesesTracker(uri: string, document: TextDocument, affectedLines: number[]): ParenthesesTracker | null {
+        if (!this.settings.enableParenthesesCaching) {
+            return null;
+        }
+
+        const cached = this.parenthesesCache.get(uri);
+        if (!cached) {
+            this.metrics.parenthesesCacheMisses++;
+            return null;
+        }
+
+        // Check version and content hash
+        const contentHash = this.calculateContentHash(document.getText());
+        if (cached.version !== document.version || cached.contentHash !== contentHash) {
+            this.parenthesesCache.delete(uri);
+            this.totalCacheSize -= cached.size;
+            this.metrics.parenthesesCacheMisses++;
+            return null;
+        }
+
+        // Check if affected lines overlap with cached lines
+        if (!this.linesOverlap(affectedLines, cached.affectedLines)) {
+            this.metrics.parenthesesCacheMisses++;
+            return null;
+        }
+
+        // Update access statistics
+        cached.lastAccessed = Date.now();
+        cached.accessCount++;
+        this.metrics.parenthesesCacheHits++;
+        
+        return cached.data;
+    }
+
+    /**
+     * Cache parentheses tracker for optimized bracket matching
+     * Requirement: Optimize parentheses matching algorithms for better performance
+     */
+    public cacheParenthesesTracker(
+        uri: string, 
+        document: TextDocument, 
+        tracker: ParenthesesTracker, 
+        affectedLines: number[]
+    ): void {
+        if (!this.settings.enableParenthesesCaching) {
+            return;
+        }
+
+        const contentHash = this.calculateContentHash(document.getText());
+        const size = this.estimateParenthesesTrackerSize(tracker);
+        
+        // Check if we need to free memory before caching
+        if (this.totalCacheSize + size > this.settings.maxCacheSize) {
+            this.evictLeastRecentlyUsed(size);
+        }
+
+        const cacheEntry: ParenthesesCacheEntry = {
+            data: tracker,
+            version: document.version,
+            contentHash,
+            affectedLines: [...affectedLines],
+            timestamp: Date.now(),
+            accessCount: 1,
+            lastAccessed: Date.now(),
+            size
+        };
+
+        this.parenthesesCache.set(uri, cacheEntry);
+        this.totalCacheSize += size;
+    }
+
+    /**
+     * Get optimized incremental parsing ranges for multi-line patterns
+     * Requirement: Implement incremental parsing for modified multi-line patterns only
+     */
+    public getMultiLinePatternIncrementalRanges(
+        document: TextDocument, 
+        changes: any[], 
+        existingPatterns: MultiLinePatternMetadata[]
+    ): { start: number; end: number }[] {
+        if (!this.settings.enableIncrementalParsing || !changes || changes.length === 0) {
+            return [{ start: 0, end: document.getText().length }];
+        }
+
+        const ranges: { start: number; end: number }[] = [];
+        const text = document.getText();
+        const lines = text.split('\n');
+
+        for (const change of changes) {
+            // Find multi-line patterns that might be affected by this change
+            const affectedPatterns = this.findAffectedMultiLinePatterns(change, existingPatterns);
+            
+            if (affectedPatterns.length > 0) {
+                // Expand range to include entire affected patterns
+                for (const pattern of affectedPatterns) {
+                    const startLine = Math.max(0, pattern.startLine - 2);
+                    const endLine = Math.min(lines.length - 1, pattern.endLine + 2);
+                    
+                    const startOffset = this.getOffsetFromPosition(text, { line: startLine, character: 0 });
+                    const endOffset = this.getOffsetFromPosition(text, { line: endLine, character: lines[endLine]?.length || 0 });
+                    
+                    ranges.push({ start: startOffset, end: endOffset });
+                }
+            } else {
+                // Standard incremental range with buffer for potential multi-line patterns
+                const startLine = Math.max(0, change.range.start.line - 10);
+                const endLine = Math.min(lines.length - 1, change.range.end.line + 10);
+                
+                const startOffset = this.getOffsetFromPosition(text, { line: startLine, character: 0 });
+                const endOffset = this.getOffsetFromPosition(text, { line: endLine, character: lines[endLine]?.length || 0 });
+                
+                ranges.push({ start: startOffset, end: endOffset });
+            }
+        }
+
+        return this.mergeOverlappingRanges(ranges);
+    }
+
+    /**
+     * Check if multi-line pattern complexity exceeds limits for memory management
+     * Requirement: Create memory management strategies for complex nested patterns
+     */
+    public isMultiLinePatternTooComplex(pattern: MultiLinePatternMetadata): boolean {
+        // Check nesting depth
+        const depth = this.calculatePatternDepth(pattern);
+        if (depth > this.settings.maxMultiLinePatternDepth) {
+            return true;
+        }
+
+        // Check content size
+        const contentSize = pattern.content.length;
+        if (contentSize > this.settings.maxFileSize / 10) { // 10% of max file size
+            return true;
+        }
+
+        // Check number of nested patterns
+        const nestedCount = this.countNestedPatterns(pattern);
+        if (nestedCount > 50) { // Arbitrary limit for nested patterns
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
      * Clear cache for a specific document
      */
     public clearDocumentCache(uri: string): void {
@@ -257,6 +504,18 @@ export class PerformanceManager {
         if (diagnosticCache) {
             this.totalCacheSize -= diagnosticCache.size;
             this.diagnosticCache.delete(uri);
+        }
+
+        const multiLinePatternCache = this.multiLinePatternCache.get(uri);
+        if (multiLinePatternCache) {
+            this.totalCacheSize -= multiLinePatternCache.size;
+            this.multiLinePatternCache.delete(uri);
+        }
+
+        const parenthesesCache = this.parenthesesCache.get(uri);
+        if (parenthesesCache) {
+            this.totalCacheSize -= parenthesesCache.size;
+            this.parenthesesCache.delete(uri);
         }
     }
 
@@ -408,7 +667,110 @@ export class PerformanceManager {
     private clearAllCaches(): void {
         this.documentCache.clear();
         this.diagnosticCache.clear();
+        this.multiLinePatternCache.clear();
+        this.parenthesesCache.clear();
         this.totalCacheSize = 0;
+    }
+
+    /**
+     * Estimate memory size of multi-line pattern metadata
+     */
+    private estimateMultiLinePatternSize(patterns: MultiLinePatternMetadata[]): number {
+        return JSON.stringify(patterns).length * 2; // Factor for object overhead
+    }
+
+    /**
+     * Estimate memory size of parentheses tracker
+     */
+    private estimateParenthesesTrackerSize(tracker: ParenthesesTracker): number {
+        return JSON.stringify(tracker).length * 2; // Factor for object overhead
+    }
+
+    /**
+     * Check if line ranges overlap
+     */
+    private rangesOverlap(ranges1: { start: number; end: number }[], ranges2: { start: number; end: number }[]): boolean {
+        for (const range1 of ranges1) {
+            for (const range2 of ranges2) {
+                if (!(range1.end < range2.start || range2.end < range1.start)) {
+                    return true; // Ranges overlap
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Check if line arrays overlap
+     */
+    private linesOverlap(lines1: number[], lines2: number[]): boolean {
+        const set1 = new Set(lines1);
+        return lines2.some(line => set1.has(line));
+    }
+
+    /**
+     * Find multi-line patterns affected by a change
+     */
+    private findAffectedMultiLinePatterns(change: any, patterns: MultiLinePatternMetadata[]): MultiLinePatternMetadata[] {
+        const affected: MultiLinePatternMetadata[] = [];
+        
+        for (const pattern of patterns) {
+            // Check if change overlaps with pattern range
+            if (change.range.start.line <= pattern.endLine && change.range.end.line >= pattern.startLine) {
+                affected.push(pattern);
+            }
+        }
+        
+        return affected;
+    }
+
+    /**
+     * Calculate the depth of nested patterns
+     */
+    private calculatePatternDepth(pattern: MultiLinePatternMetadata): number {
+        let maxDepth = 1;
+        
+        for (const nested of pattern.nestedPatterns) {
+            const nestedDepth = this.calculatePatternDepth(nested) + 1;
+            maxDepth = Math.max(maxDepth, nestedDepth);
+        }
+        
+        return maxDepth;
+    }
+
+    /**
+     * Count total number of nested patterns
+     */
+    private countNestedPatterns(pattern: MultiLinePatternMetadata): number {
+        let count = pattern.nestedPatterns.length;
+        
+        for (const nested of pattern.nestedPatterns) {
+            count += this.countNestedPatterns(nested);
+        }
+        
+        return count;
+    }
+
+    /**
+     * Evict multi-line pattern cache entries to free memory
+     */
+    private evictMultiLinePatternCache(requiredSize: number): void {
+        const entries = Array.from(this.multiLinePatternCache.entries());
+        
+        // Sort by last accessed time (oldest first)
+        entries.sort((a, b) => a[1].lastAccessed - b[1].lastAccessed);
+        
+        let freedSize = 0;
+        for (const [uri, entry] of entries) {
+            this.multiLinePatternCache.delete(uri);
+            freedSize += entry.size;
+            this.totalCacheSize -= entry.size;
+            this.metrics.memoryFreed += entry.size;
+            
+            if (freedSize >= requiredSize) {
+                break;
+            }
+        }
     }
 
     private clearAllDebounceTimers(): void {

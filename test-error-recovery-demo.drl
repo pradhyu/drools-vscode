@@ -1,0 +1,90 @@
+// Test file demonstrating error recovery for incomplete patterns
+
+// Test 1: Incomplete exists pattern at EOF
+rule "Incomplete Exists EOF"
+when
+    exists(
+        Person(age > 18,
+               name != null
+// Missing closing parenthesis - should trigger EOF error recovery
+
+// Test 2: Incomplete not pattern with recovery to next rule
+rule "Incomplete Not Pattern"
+when
+    not(
+        Person(age > 18
+        and name != null
+// Missing closing parenthesis, but parser should recover for next rule
+
+rule "Recovery Point Rule"
+when
+    Person(name == "test")
+then
+    // This rule should still be parsed despite previous error
+end
+
+// Test 3: Incomplete eval pattern
+rule "Incomplete Eval"
+when
+    eval(
+        $person.getAge() > 18 &&
+        $person.getName() != null
+// Missing closing parenthesis
+
+// Test 4: Nested incomplete patterns
+rule "Nested Incomplete"
+when
+    exists(
+        Person(age > 18) and
+        not(
+            Account(balance < 0,
+                   owner == $person
+        // Missing closing parenthesis for not()
+    // Missing closing parenthesis for exists()
+then
+    // action
+end
+
+// Test 5: Malformed accumulate pattern
+rule "Malformed Accumulate"
+when
+    accumulate(
+        Person(age > $minAge),
+        init: int total = 0;
+        action: total += $person.getAge();
+        // Missing result clause and closing parenthesis
+
+// Test 6: Empty patterns that should generate warnings
+rule "Empty Patterns"
+when
+    exists()  // Empty exists
+    and not() // Empty not
+    and eval() // Empty eval
+then
+    // action
+end
+
+// Test 7: Partial pattern with valid content that can be parsed
+rule "Partial Valid Pattern"
+when
+    exists(
+        Person(age > 18, name != null)  // This part is valid
+        and Account(owner == $person    // This part is incomplete
+then
+    // action
+end
+
+// Test 8: Deeply nested incomplete patterns
+rule "Deep Nesting"
+when
+    exists(
+        Person(age > 18) and
+        not(
+            exists(
+                Account(balance > 0) and
+                not(
+                    Transaction(amount < 0
+                // Multiple levels of incomplete nesting
+then
+    // action
+end

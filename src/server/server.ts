@@ -23,7 +23,9 @@ import {
     WorkspaceSymbolParams,
     WorkspaceSymbol,
     DefinitionParams,
-    Location
+    Location,
+    HoverParams,
+    Hover
 } from 'vscode-languageserver/node';
 
 import { TextDocument } from 'vscode-languageserver-textdocument';
@@ -34,6 +36,7 @@ import { DroolsCompletionProvider, CompletionSettings } from './providers/comple
 import { DroolsFormattingProvider, FormattingSettings } from './providers/formattingProvider';
 import { DroolsFoldingProvider, FoldingSettings } from './providers/foldingProvider';
 import { DroolsSymbolProvider, SymbolSettings } from './providers/symbolProvider';
+import { DroolsBracketMatchingProvider, BracketMatchingSettings } from './providers/bracketMatchingProvider';
 import { PerformanceManager, PerformanceSettings } from './performance/performanceManager';
 
 // Create a connection for the server, using Node's IPC as a transport.
@@ -131,7 +134,9 @@ connection.onInitialize((params: InitializeParams) => {
             // Tell the client that this server supports workspace symbols.
             workspaceSymbolProvider: true,
             // Tell the client that this server supports go-to-definition.
-            definitionProvider: true
+            definitionProvider: true,
+            // Tell the client that this server supports hover.
+            hoverProvider: true
         }
     };
     
@@ -157,14 +162,17 @@ connection.onInitialized(() => {
         });
     }
     
-    // Initialize performance manager with default settings
+    // Initialize performance manager with default settings including multi-line pattern optimizations
     const performanceSettings: PerformanceSettings = {
         enableIncrementalParsing: defaultSettings.performance.enableIncrementalParsing,
         enableCaching: defaultSettings.performance.enableCaching,
         debounceDelay: defaultSettings.performance.debounceDelay,
         maxCacheSize: 50 * 1024 * 1024, // 50MB
         maxFileSize: defaultSettings.server.maxFileSize,
-        gcInterval: 5 * 60 * 1000 // 5 minutes
+        gcInterval: 5 * 60 * 1000, // 5 minutes
+        maxMultiLinePatternDepth: 20, // Limit nesting depth for memory management
+        multiLinePatternCacheSize: 10 * 1024 * 1024, // 10MB for multi-line pattern cache
+        enableParenthesesCaching: true // Enable optimized parentheses matching
     };
     performanceManager = new PerformanceManager(performanceSettings);
 });
@@ -395,7 +403,9 @@ async function getOrParseDocument(textDocument: TextDocument, changes?: any[]): 
             enableIncrementalParsing: settings.performance.enableIncrementalParsing && changes && changes.length > 0,
             ranges: settings.performance.enableIncrementalParsing ? 
                 performanceManager.getIncrementalParsingRanges(textDocument, changes || []) : undefined,
-            previousAST
+            previousAST,
+            performanceManager,
+            documentUri: textDocument.uri
         };
 
         // Parse the document with performance optimizations
@@ -688,7 +698,9 @@ connection.onDocumentFormatting(
                 insertFinalNewline: settings.formatting.insertFinalNewline,
                 spaceAroundOperators: settings.formatting.spaceAroundOperators,
                 spaceAfterKeywords: true, // Default value
-                alignRuleBlocks: settings.formatting.alignRuleBlocks
+                alignRuleBlocks: settings.formatting.alignRuleBlocks,
+                alignClosingParentheses: true, // Default value for multi-line patterns
+                indentMultiLinePatterns: true // Default value for multi-line patterns
             };
             
             // Create formatting provider with configuration settings
@@ -734,7 +746,9 @@ connection.onDocumentRangeFormatting(
                 insertFinalNewline: settings.formatting.insertFinalNewline,
                 spaceAroundOperators: settings.formatting.spaceAroundOperators,
                 spaceAfterKeywords: true, // Default value
-                alignRuleBlocks: settings.formatting.alignRuleBlocks
+                alignRuleBlocks: settings.formatting.alignRuleBlocks,
+                alignClosingParentheses: true, // Default value for multi-line patterns
+                indentMultiLinePatterns: true // Default value for multi-line patterns
             };
             
             const configuredProvider = new DroolsFormattingProvider(formattingSettings);
@@ -775,6 +789,46 @@ connection.onFoldingRanges(
         } catch (error) {
             logError('FoldingRanges', error, params.textDocument.uri);
             return [];
+        }
+    }
+);
+
+// Hover provider for bracket matching
+connection.onHover(
+    async (params: HoverParams): Promise<Hover | null> => {
+        try {
+            const document = documents.get(params.textDocument.uri);
+            if (!document) {
+                return null;
+            }
+
+            const settings = await getDocumentSettings(params.textDocument.uri);
+            if (!settings.features.enableBracketMatching) {
+                return null;
+            }
+
+            // Get parsed document
+            const parseResult = await getOrParseDocument(document);
+            
+            // Create bracket matching settings from server settings
+            const bracketMatchingSettings: BracketMatchingSettings = {
+                enableBracketMatching: settings.features.enableBracketMatching,
+                enableHoverSupport: true,
+                enableVisualIndicators: true,
+                maxSearchDistance: 1000
+            };
+            
+            // Create bracket matching provider and get hover
+            const bracketMatchingProvider = new DroolsBracketMatchingProvider(bracketMatchingSettings);
+            return bracketMatchingProvider.provideBracketHover(
+                document,
+                params.position,
+                parseResult
+            );
+            
+        } catch (error) {
+            logError('Hover', error, params.textDocument.uri);
+            return null;
         }
     }
 );

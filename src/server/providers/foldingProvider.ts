@@ -3,7 +3,7 @@ import {
     FoldingRangeKind
 } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
-import { DroolsAST, RuleNode, FunctionNode, AnyASTNode } from '../parser/ast';
+import { DroolsAST, RuleNode, FunctionNode, AnyASTNode, ConditionNode, MultiLinePatternNode } from '../parser/ast';
 import { ParseResult } from '../parser/droolsParser';
 
 export interface FoldingSettings {
@@ -11,6 +11,7 @@ export interface FoldingSettings {
     enableFunctionFolding: boolean;
     enableCommentFolding: boolean;
     enableImportFolding: boolean;
+    enableMultiLinePatternFolding: boolean;
 }
 
 export class DroolsFoldingProvider {
@@ -22,6 +23,7 @@ export class DroolsFoldingProvider {
             enableFunctionFolding: true,
             enableCommentFolding: true,
             enableImportFolding: true,
+            enableMultiLinePatternFolding: true,
             ...settings
         };
     }
@@ -108,6 +110,13 @@ export class DroolsFoldingProvider {
                 kind: FoldingRangeKind.Region,
                 collapsedText: 'when...'
             });
+
+            // Add folding ranges for multi-line patterns within conditions
+            if (this.settings.enableMultiLinePatternFolding) {
+                rule.when.conditions.forEach(condition => {
+                    this.addConditionFoldingRanges(foldingRanges, condition);
+                });
+            }
         }
 
         if (rule.then && rule.then.range.end.line > rule.then.range.start.line) {
@@ -269,5 +278,91 @@ export class DroolsFoldingProvider {
                 });
             }
         });
+    }
+
+    /**
+     * Add folding ranges for conditions that contain multi-line patterns
+     */
+    private addConditionFoldingRanges(foldingRanges: FoldingRange[], condition: ConditionNode): void {
+        // Add folding range for multi-line conditions
+        if (condition.isMultiLine && condition.range.end.line > condition.range.start.line) {
+            const collapsedText = this.getConditionCollapsedText(condition);
+            foldingRanges.push({
+                startLine: condition.range.start.line,
+                endLine: condition.range.end.line,
+                kind: FoldingRangeKind.Region,
+                collapsedText
+            });
+        }
+
+        // Add folding ranges for multi-line patterns within the condition
+        if (condition.multiLinePattern) {
+            this.addMultiLinePatternFoldingRanges(foldingRanges, condition.multiLinePattern);
+        }
+
+        // Add folding ranges for nested conditions
+        if (condition.nestedConditions) {
+            condition.nestedConditions.forEach(nestedCondition => {
+                this.addConditionFoldingRanges(foldingRanges, nestedCondition);
+            });
+        }
+    }
+
+    /**
+     * Add folding ranges for multi-line patterns
+     */
+    private addMultiLinePatternFoldingRanges(foldingRanges: FoldingRange[], pattern: MultiLinePatternNode): void {
+        const startLine = pattern.range.start.line;
+        const endLine = pattern.range.end.line;
+
+        // Only create folding range if the pattern spans multiple lines
+        if (endLine > startLine) {
+            const collapsedText = this.getMultiLinePatternCollapsedText(pattern);
+            foldingRanges.push({
+                startLine: startLine,
+                endLine: endLine,
+                kind: FoldingRangeKind.Region,
+                collapsedText
+            });
+        }
+
+        // Add folding ranges for nested patterns
+        pattern.nestedPatterns.forEach(nestedPattern => {
+            this.addMultiLinePatternFoldingRanges(foldingRanges, nestedPattern);
+        });
+
+        // Add folding ranges for inner conditions
+        pattern.innerConditions.forEach(innerCondition => {
+            this.addConditionFoldingRanges(foldingRanges, innerCondition);
+        });
+    }
+
+    /**
+     * Generate collapsed text for a condition
+     */
+    private getConditionCollapsedText(condition: ConditionNode): string {
+        if (condition.conditionType && condition.conditionType !== 'pattern') {
+            return `${condition.conditionType}(...)`;
+        }
+
+        if (condition.factType) {
+            const variable = condition.variable ? `${condition.variable}: ` : '';
+            return `${variable}${condition.factType}(...)`;
+        }
+
+        // Fallback to first few words of content
+        const words = condition.content.trim().split(/\s+/).slice(0, 3);
+        return `${words.join(' ')}...`;
+    }
+
+    /**
+     * Generate collapsed text for a multi-line pattern
+     */
+    private getMultiLinePatternCollapsedText(pattern: MultiLinePatternNode): string {
+        const keyword = pattern.keyword;
+        const depth = pattern.depth > 0 ? ` (depth ${pattern.depth})` : '';
+        const complete = pattern.isComplete ? '' : ' (incomplete)';
+        
+        return `${keyword}(...)${depth}${complete}`;
     }
 }

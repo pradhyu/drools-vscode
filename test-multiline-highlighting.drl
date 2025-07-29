@@ -1,0 +1,126 @@
+package com.example.multiline.test;
+
+import com.example.Person;
+import com.example.Account;
+import com.example.Transaction;
+
+rule "Multi-line exists pattern test"
+when
+    $person : Person(
+        age > 18,
+        name != null
+    )
+    exists(
+        Account(
+            owner == $person,
+            balance > 1000,
+            type in ("CHECKING", "SAVINGS")
+        )
+    )
+then
+    System.out.println("Person has qualifying account");
+end
+
+rule "Multi-line not pattern test"
+when
+    $customer : Customer(
+        status == "ACTIVE"
+    )
+    not(
+        Restriction(
+            customer == $customer,
+            type in ("CREDIT_HOLD", "ACCOUNT_FREEZE"),
+            active == true
+        )
+    )
+then
+    System.out.println("Customer has no restrictions");
+end
+
+rule "Multi-line eval pattern test"
+when
+    $account : Account()
+    eval(
+        $account.getBalance() > 1000 &&
+        $account.getType().equals("PREMIUM") &&
+        $account.getOwner().getAge() >= 21
+    )
+then
+    System.out.println("Premium account qualifies");
+end
+
+rule "Nested multi-line patterns test"
+when
+    $person : Person(
+        age >= 18,
+        status == "ACTIVE"
+    )
+    exists(
+        Account(
+            owner == $person,
+            balance > 5000
+        ) and
+        not(
+            Debt(
+                person == $person,
+                amount > 1000
+            )
+        )
+    )
+then
+    System.out.println("Person qualifies for premium services");
+end
+
+rule "Complex nested multi-line test"
+when
+    $customer : Customer(
+        (age >= 21 && creditScore > 700) || 
+        (age >= 18 && hasGuarantor == true)
+    )
+    exists(
+        Account(
+            owner == $customer,
+            type == "PREMIUM"
+        ) and
+        forall(
+            Transaction(
+                account.owner == $customer,
+                amount > 100
+            )
+            CreditCheck(
+                customer == $customer,
+                amount >= Transaction.amount,
+                approved == true
+            )
+        )
+    )
+then
+    $customer.setTier("PLATINUM");
+end
+
+rule "Multi-line collect pattern test"
+when
+    $customer : Customer()
+    $totalBalance : Number() from collect(
+        Account(
+            owner == $customer,
+            balance > 0
+        ).balance
+    )
+then
+    System.out.println("Total balance: " + $totalBalance);
+end
+
+rule "Multi-line accumulate pattern test"
+when
+    $customer : Customer()
+    $avgBalance : Number() from accumulate(
+        Account(
+            owner == $customer,
+            type == "CHECKING"
+        ),
+        average(balance)
+    )
+then
+    System.out.println("Average balance: " + $avgBalance);
+end

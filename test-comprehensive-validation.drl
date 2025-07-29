@@ -1,0 +1,163 @@
+package com.example.validation.test;
+
+import java.util.List;
+import java.util.Date;
+
+global List<String> messages;
+
+// Test 1: Multi-line condition with proper bracket matching
+rule "Multi-line Condition Test"
+    salience 100
+    when
+        $person : Person(
+            age > 18,
+            name != null,
+            address.city == "New York",
+            status == "ACTIVE"
+        )
+        $account : Account(
+            owner == $person,
+            balance > 1000.0,
+            type.equals("CHECKING")
+        )
+        exists(
+            Transaction(
+                account == $account,
+                amount > 500,
+                date.after(new Date())
+            )
+        )
+    then
+        messages.add("Found valid person with active account");
+        $person.setStatus("VERIFIED");
+        update($person);
+end
+
+// Test 2: Multi-line function with proper brace matching
+function String formatPersonInfo(Person person, Account account) {
+    StringBuilder sb = new StringBuilder();
+    if (person != null && account != null) {
+        sb.append("Person: ").append(person.getName());
+        sb.append(", Account: ").append(account.getNumber());
+        if (account.getBalance() > 10000) {
+            sb.append(" (Premium)");
+        }
+    }
+    return sb.toString();
+}
+
+// Test 3: Complex multi-line eval condition
+rule "Complex Eval Test"
+    when
+        $person : Person()
+        eval(
+            $person.getAge() > 21 &&
+            $person.getIncome() > 50000 &&
+            $person.getCreditScore() > 700 &&
+            $person.getAddress() != null &&
+            $person.getAddress().getState().equals("CA")
+        )
+    then
+        System.out.println("Qualified California resident");
+end
+
+// Test 4: Nested conditions with multiple levels
+rule "Nested Conditions"
+    when
+        $customer : Customer(
+            type == "PREMIUM",
+            status == "ACTIVE"
+        )
+        exists(
+            Order(
+                customer == $customer,
+                total > 1000,
+                items.size() > 5,
+                shippingAddress.country == "USA"
+            ) and
+            Payment(
+                order.customer == $customer,
+                status == "COMPLETED",
+                method == "CREDIT_CARD"
+            )
+        )
+        not(
+            Complaint(
+                customer == $customer,
+                status == "OPEN",
+                severity == "HIGH"
+            )
+        )
+    then
+        $customer.addReward(100);
+        $customer.setTier("GOLD");
+        update($customer);
+        System.out.println("Customer upgraded to GOLD tier");
+end
+
+// Test 5: Multi-line string handling
+rule "String Handling Test"
+    when
+        $message : Message(
+            content.contains("urgent"),
+            sender.name == "John \"Johnny\" Smith",
+            recipient != null
+        )
+    then
+        String response = "Received urgent message from " + 
+                         $message.getSender().getName() + 
+                         " with content: \"" + $message.getContent() + "\"";
+        System.out.println(response);
+end
+
+// Test 6: Query with multi-line conditions
+query "findHighValueCustomers"(String state, double minIncome)
+    $customer : Customer(
+        address.state == state,
+        income > minIncome,
+        status == "ACTIVE"
+    )
+    $account : Account(
+        owner == $customer,
+        balance > 50000
+    )
+end
+
+// Test 7: Declare with multiple fields
+declare CreditCheck
+    customerId : String
+    score : int
+    date : Date
+    agency : String
+    status : String
+end
+
+// Test 8: Rule with complex then clause
+rule "Complex Action Rule"
+    when
+        $order : Order(
+            status == "PENDING",
+            total > 500
+        )
+        $customer : Customer(
+            id == $order.customerId,
+            creditRating > 700
+        )
+    then
+        // Multi-line action block
+        if ($order.getTotal() > 1000) {
+            $order.setDiscount(0.10);
+            $order.setPriority("HIGH");
+        } else {
+            $order.setDiscount(0.05);
+            $order.setPriority("NORMAL");
+        }
+        
+        $order.setStatus("APPROVED");
+        $customer.addOrder($order);
+        
+        update($order);
+        update($customer);
+        
+        messages.add("Order " + $order.getId() + " approved for customer " + $customer.getName());
+end

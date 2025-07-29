@@ -20,7 +20,9 @@ describe('DroolsFormattingProvider', () => {
             insertFinalNewline: true,
             spaceAroundOperators: true,
             spaceAfterKeywords: true,
-            alignRuleBlocks: true
+            alignRuleBlocks: true,
+            alignClosingParentheses: true,
+            indentMultiLinePatterns: true
         };
         provider = new DroolsFormattingProvider(settings);
         parser = new DroolsParser();

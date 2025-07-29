@@ -93,14 +93,65 @@ export interface ThenNode extends ASTNode {
     actions: string; // Raw action code for now
 }
 
-// Condition node within when clause
+// Multi-line pattern node interface
+export interface MultiLinePatternNode extends ASTNode {
+    type: 'MultiLinePattern';
+    patternType: 'exists' | 'not' | 'eval' | 'forall' | 'collect' | 'accumulate';
+    keyword: string;
+    content: string;
+    nestedPatterns: MultiLinePatternNode[];
+    parenthesesRanges: Range[];
+    isComplete: boolean;
+    depth: number;
+    innerConditions: ConditionNode[];
+}
+
+// Multi-line pattern metadata for parsing context
+export interface MultiLinePatternMetadata {
+    type: 'exists' | 'not' | 'eval' | 'forall' | 'collect' | 'accumulate';
+    keyword: string;
+    startLine: number;
+    endLine: number;
+    startColumn: number;
+    endColumn: number;
+    content: string;
+    nestedPatterns: MultiLinePatternMetadata[];
+    parenthesesRanges: Range[];
+    isComplete: boolean;
+}
+
+// Parentheses tracking information
+export interface ParenthesesTracker {
+    openPositions: Position[];
+    closePositions: Position[];
+    matchedPairs: Array<{open: Position, close: Position}>;
+    unmatchedOpen: Position[];
+    unmatchedClose: Position[];
+}
+
+// Parsing context for multi-line patterns
+export interface ParsingContext {
+    parenthesesDepth: number;
+    currentPattern?: MultiLinePatternMetadata;
+    lineStart: number;
+    columnStart: number;
+    inMultiLinePattern: boolean;
+    patternStack: MultiLinePatternMetadata[];
+}
+
+// Enhanced condition node with multi-line support
 export interface ConditionNode extends ASTNode {
     type: 'Condition';
-    conditionType: 'pattern' | 'eval' | 'exists' | 'not' | 'and' | 'or';
+    conditionType: 'pattern' | 'eval' | 'exists' | 'not' | 'and' | 'or' | 'forall' | 'collect' | 'accumulate';
     content: string;
     variable?: string;
     factType?: string;
     constraints?: ConstraintNode[];
+    isMultiLine?: boolean;
+    spanLines?: number[];
+    parenthesesRanges?: Range[];
+    multiLinePattern?: MultiLinePatternNode;
+    nestedConditions?: ConditionNode[];
 }
 
 // Constraint node within conditions
@@ -147,6 +198,7 @@ export type AnyASTNode =
     | ThenNode
     | ConditionNode
     | ConstraintNode
+    | MultiLinePatternNode
     | QueryNode
     | DeclareNode
     | FieldNode;

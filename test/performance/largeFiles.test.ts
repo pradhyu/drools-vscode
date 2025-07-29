@@ -42,7 +42,9 @@ describe('Performance Tests for Large Files', () => {
             insertFinalNewline: true,
             spaceAroundOperators: true,
             spaceAfterKeywords: true,
-            alignRuleBlocks: true
+            alignRuleBlocks: true,
+            alignClosingParentheses: true,
+            indentMultiLinePatterns: true
         };
         formattingProvider = new DroolsFormattingProvider(formattingSettings);
     });

@@ -1,0 +1,1 @@
+https://github.com/apache/incubator-kie-drools/blob/main/drools-drl/drools-drl-parser/src/main/resources/org/drools/drl/parser/DRL6Expressions.g
