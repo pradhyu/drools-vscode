@@ -1,90 +1,66 @@
-/**
- * Debug test to understand validation flow
- */
+// Debug script to test variable validation
+const testRule = `rule "ExampleOfBackwardChainingRules"
+dialect "java"
+when
+    $m : Message( status == Message.GOODBYE, message : message )
+then
+    System.out.println( message );
+    System.out.println( $m );
+end`;
 
-const { DroolsDiagnosticProvider } = require('./out/server/providers/diagnosticProvider');
-const { TextDocument } = require('vscode-languageserver-textdocument');
+console.log('Testing variable validation with rule:');
+console.log(testRule);
+console.log('\n--- Variable Detection Test ---');
 
-// Test with eval pattern
-function createEvalTestAST() {
-    return {
-        type: 'DroolsFile',
-        range: { start: { line: 0, character: 0 }, end: { line: 10, character: 0 } },
-        packageDeclaration: null,
-        imports: [],
-        globals: [],
-        functions: [],
-        queries: [],
-        declares: [],
-        rules: [
-            {
-                type: 'Rule',
-                name: 'Test Rule',
-                range: { start: { line: 0, character: 0 }, end: { line: 9, character: 3 } },
-                attributes: [],
-                when: {
-                    type: 'When',
-                    range: { start: { line: 1, character: 0 }, end: { line: 6, character: 0 } },
-                    conditions: [
-                        {
-                            type: 'Condition',
-                            conditionType: 'eval',
-                            content: 'eval()',
-                            range: { start: { line: 2, character: 4 }, end: { line: 2, character: 10 } },
-                            isMultiLine: false
-                        }
-                    ]
-                },
-                then: {
-                    type: 'Then',
-                    range: { start: { line: 7, character: 0 }, end: { line: 9, character: 0 } },
-                    actions: 'System.out.println("Action");'
-                }
-            }
-        ]
-    };
+// Test the regex patterns
+const variableDeclarationRegex = /\$([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g;
+const declaredVariables = new Set();
+let match;
+
+while ((match = variableDeclarationRegex.exec(testRule)) !== null) {
+    const variable = '$' + match[1];
+    declaredVariables.add(variable);
+    console.log('Found declared variable:', variable);
 }
 
-async function debugValidation() {
-    console.log('Debug Multi-line Pattern Validation\n');
-    
-    const settings = {
-        maxNumberOfProblems: 100,
-        enableSyntaxValidation: true,
-        enableSemanticValidation: true,
-        enableBestPracticeWarnings: true
-    };
-    
-    const diagnosticProvider = new DroolsDiagnosticProvider(settings);
-    
-    try {
-        const document = TextDocument.create(
-            'test://test.drl',
-            'drools',
-            1,
-            'rule "Test Rule"\nwhen\n    eval()\nthen\n    System.out.println("Action");\nend'
-        );
-        
-        const ast = createEvalTestAST();
-        
-        console.log('AST condition:');
-        console.log(JSON.stringify(ast.rules[0].when.conditions[0], null, 2));
-        
-        const diagnostics = diagnosticProvider.provideDiagnostics(document, ast, []);
-        
-        console.log('\nAll diagnostics:');
-        diagnostics.forEach((diagnostic, index) => {
-            const severity = ['Error', 'Warning', 'Information', 'Hint'][diagnostic.severity - 1];
-            console.log(`  ${index + 1}. [${severity}] ${diagnostic.message} (Source: ${diagnostic.source})`);
-        });
-        
-        const multiLineDiagnostics = diagnostics.filter(d => d.source === 'drools-multiline');
-        console.log(`\nMulti-line diagnostics: ${multiLineDiagnostics.length}`);
-        
-    } catch (error) {
-        console.log(`Error: ${error.message}`);
-        console.log(error.stack);
+console.log('\nDeclared variables:', Array.from(declaredVariables));
+
+// Test variable usage detection
+const variableUsageRegex = /\$[a-zA-Z_][a-zA-Z0-9_]*/g;
+const usedVariables = testRule.match(variableUsageRegex) || [];
+console.log('Used variables:', usedVariables);
+
+// Check for undefined variables
+const undefinedVariables = [];
+for (const usedVar of usedVariables) {
+    if (!declaredVariables.has(usedVar)) {
+        undefinedVariables.push(usedVar);
     }
 }
 
-debugValidation().catch(console.error);
+console.log('Undefined variables:', undefinedVariables);
+
+if (undefinedVariables.length === 0) {
+    console.log('✅ All variables are properly defined!');
+} else {
+    console.log('❌ Found undefined variables:', undefinedVariables);
+}
+
+// Test the when clause extraction
+const whenMatch = testRule.match(/when\s+([\s\S]*?)\s+then/);
+if (whenMatch) {
+    const whenContent = whenMatch[1];
+    console.log('\nWhen clause content:');
+    console.log(whenContent);
+    
+    // Test variable extraction from when clause
+    const whenVariables = new Set();
+    let whenVarMatch;
+    const whenVarRegex = /\$([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g;
+    
+    while ((whenVarMatch = whenVarRegex.exec(whenContent)) !== null) {
+        whenVariables.add('$' + whenVarMatch[1]);
+    }
+    
+    console.log('Variables from when clause:', Array.from(whenVariables));
+}

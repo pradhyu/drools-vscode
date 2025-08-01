@@ -31,14 +31,14 @@ export function activate(context: vscode.ExtensionContext) {
     // Create output channel for logging
     outputChannel = vscode.window.createOutputChannel('Drools Extension');
     outputChannel.appendLine('Drools VSCode Extension activated');
-    
+
     // Initialize fallback provider
     fallbackProvider = new DroolsFallbackProvider(outputChannel);
-    
+
     // Start the language server with error handling (only if enabled)
     const serverConfig = configManager.getServerConfiguration();
-    if (configManager.isFeatureEnabled('enableCompletion') || 
-        configManager.isFeatureEnabled('enableDiagnostics') || 
+    if (configManager.isFeatureEnabled('enableCompletion') ||
+        configManager.isFeatureEnabled('enableDiagnostics') ||
         configManager.isFeatureEnabled('enableFormatting') ||
         configManager.isFeatureEnabled('enableSymbolProvider')) {
         startLanguageServer(context);
@@ -144,8 +144,8 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Add disposables to context subscriptions
     const disposables = [
-        onDidOpenTextDocument, 
-        setLanguageCommand, 
+        onDidOpenTextDocument,
+        setLanguageCommand,
         formatOnSaveHandler,
         createCustomSnippetCommand,
         manageSnippetsCommand,
@@ -160,10 +160,10 @@ export function activate(context: vscode.ExtensionContext) {
     // Set up configuration change handler
     const configChangeHandler = configManager.onConfigurationChanged((config) => {
         outputChannel.appendLine('Configuration changed, reloading extension features...');
-        
+
         // Restart language server if needed
-        if (config.features.enableCompletion || 
-            config.features.enableDiagnostics || 
+        if (config.features.enableCompletion ||
+            config.features.enableDiagnostics ||
             config.features.enableFormatting ||
             config.features.enableSymbolProvider) {
             if (fallbackMode) {
@@ -186,10 +186,10 @@ export function activate(context: vscode.ExtensionContext) {
 function startLanguageServer(context: vscode.ExtensionContext) {
     try {
         outputChannel.appendLine('Starting Drools Language Server...');
-        
+
         // The server is implemented in node
         const serverModule = context.asAbsolutePath(path.join('out', 'server', 'server.js'));
-        
+
         // Check if server module exists
         if (!fs.existsSync(serverModule)) {
             outputChannel.appendLine(`ERROR: Language server module not found at ${serverModule}`);
@@ -225,20 +225,20 @@ function startLanguageServer(context: vscode.ExtensionContext) {
                     outputChannel.appendLine(`Language server error: ${error.message}`);
                     outputChannel.appendLine(`Message: ${message ? JSON.stringify(message) : 'N/A'}`);
                     outputChannel.appendLine(`Error count: ${count || 0}`);
-                    
+
                     // If too many errors, switch to fallback mode
                     if ((count || 0) >= 5) {
                         outputChannel.appendLine('Too many language server errors, switching to fallback mode');
                         enableFallbackMode('Too many language server errors', context);
                         return { action: ErrorAction.Shutdown };
                     }
-                    
+
                     return { action: ErrorAction.Continue };
                 },
                 closed: () => {
                     outputChannel.appendLine('Language server connection closed');
                     isLanguageServerAvailable = false;
-                    
+
                     // Attempt to restart after a delay
                     setTimeout(() => {
                         if (!fallbackMode) {
@@ -246,7 +246,7 @@ function startLanguageServer(context: vscode.ExtensionContext) {
                             restartLanguageServer(context);
                         }
                     }, 5000);
-                    
+
                     return { action: CloseAction.DoNotRestart };
                 }
             }
@@ -263,7 +263,7 @@ function startLanguageServer(context: vscode.ExtensionContext) {
         // Set up state change handlers
         client.onDidChangeState((event) => {
             outputChannel.appendLine(`Language server state changed: ${State[event.oldState]} -> ${State[event.newState]}`);
-            
+
             switch (event.newState) {
                 case State.Running:
                     isLanguageServerAvailable = true;
@@ -301,13 +301,13 @@ function startLanguageServer(context: vscode.ExtensionContext) {
 function enableFallbackMode(reason: string, context?: vscode.ExtensionContext) {
     fallbackMode = true;
     isLanguageServerAvailable = false;
-    
+
     outputChannel.appendLine(`Enabling fallback mode: ${reason}`);
-    
+
     // Dispose of any existing fallback providers
     fallbackDisposables.forEach(disposable => disposable.dispose());
     fallbackDisposables = [];
-    
+
     // Register fallback providers if context is available
     if (context) {
         try {
@@ -319,7 +319,7 @@ function enableFallbackMode(reason: string, context?: vscode.ExtensionContext) {
     } else {
         outputChannel.appendLine('Context not available, fallback providers not registered');
     }
-    
+
     vscode.window.showWarningMessage(
         `Drools language server unavailable. Running in fallback mode with basic syntax highlighting only. Reason: ${reason}`,
         'Show Output'
@@ -328,7 +328,7 @@ function enableFallbackMode(reason: string, context?: vscode.ExtensionContext) {
             outputChannel.show();
         }
     });
-    
+
     // Set status bar message
     vscode.window.setStatusBarMessage('Drools: Fallback mode (basic syntax only)', 5000);
 }
@@ -406,17 +406,17 @@ async function createCustomSnippet(context: vscode.ExtensionContext): Promise<vo
         // Get snippet body from active editor selection or prompt for input
         let snippetBody: string[] = [];
         const activeEditor = vscode.window.activeTextEditor;
-        
+
         if (activeEditor && !activeEditor.selection.isEmpty) {
             // Use selected text as snippet body
             const selectedText = activeEditor.document.getText(activeEditor.selection);
             snippetBody = selectedText.split('\n');
-            
+
             const useSelection = await vscode.window.showQuickPick(
                 ['Use selected text', 'Enter custom text'],
                 { placeHolder: 'Use selected text as snippet body?' }
             );
-            
+
             if (useSelection === 'Enter custom text') {
                 snippetBody = [];
             }
@@ -451,7 +451,7 @@ async function createCustomSnippet(context: vscode.ExtensionContext): Promise<vo
 
         // Save the snippet
         await saveCustomSnippet(context, snippetName.trim(), newSnippet);
-        
+
         vscode.window.showInformationMessage(`Custom snippet "${snippetName}" created successfully!`);
     } catch (error) {
         vscode.window.showErrorMessage(`Failed to create custom snippet: ${error}`);
@@ -462,7 +462,7 @@ async function manageSnippets(context: vscode.ExtensionContext): Promise<void> {
     try {
         const customSnippets = await loadCustomSnippets(context);
         const builtInSnippets = await loadBuiltInSnippets(context);
-        
+
         const actions = [
             'View All Snippets',
             'Edit Custom Snippet',
@@ -500,7 +500,7 @@ async function manageSnippets(context: vscode.ExtensionContext): Promise<void> {
 async function exportSnippets(context: vscode.ExtensionContext): Promise<void> {
     try {
         const customSnippets = await loadCustomSnippets(context);
-        
+
         if (Object.keys(customSnippets).length === 0) {
             vscode.window.showInformationMessage('No custom snippets to export.');
             return;
@@ -518,12 +518,12 @@ async function exportSnippets(context: vscode.ExtensionContext): Promise<void> {
                 exportedAt: new Date().toISOString(),
                 snippets: customSnippets
             };
-            
+
             await vscode.workspace.fs.writeFile(
                 exportUri,
                 Buffer.from(JSON.stringify(exportData, null, 2))
             );
-            
+
             vscode.window.showInformationMessage(`Custom snippets exported to ${exportUri.fsPath}`);
         }
     } catch (error) {
@@ -548,9 +548,9 @@ async function importSnippets(context: vscode.ExtensionContext): Promise<void> {
 
         const fileContent = await vscode.workspace.fs.readFile(importUri[0]);
         const importData = JSON.parse(fileContent.toString());
-        
+
         let snippetsToImport: DroolsSnippetCollection;
-        
+
         // Handle different import formats
         if (importData.snippets) {
             snippetsToImport = importData.snippets;
@@ -560,7 +560,7 @@ async function importSnippets(context: vscode.ExtensionContext): Promise<void> {
 
         const existingSnippets = await loadCustomSnippets(context);
         const conflictingSnippets: string[] = [];
-        
+
         // Check for conflicts
         for (const snippetName in snippetsToImport) {
             if (existingSnippets[snippetName]) {
@@ -580,7 +580,7 @@ async function importSnippets(context: vscode.ExtensionContext): Promise<void> {
             if (action === 'Cancel') {
                 return;
             }
-            
+
             if (action === 'Skip Existing') {
                 for (const conflictName of conflictingSnippets) {
                     delete snippetsToImport[conflictName];
@@ -591,7 +591,7 @@ async function importSnippets(context: vscode.ExtensionContext): Promise<void> {
         // Import snippets
         const mergedSnippets = { ...existingSnippets, ...snippetsToImport };
         await saveAllCustomSnippets(context, mergedSnippets);
-        
+
         const importedCount = Object.keys(snippetsToImport).length;
         vscode.window.showInformationMessage(`Successfully imported ${importedCount} snippet(s)!`);
     } catch (error) {
@@ -633,7 +633,7 @@ async function saveAllCustomSnippets(context: vscode.ExtensionContext, snippets:
 
 async function viewAllSnippets(builtIn: DroolsSnippetCollection, custom: DroolsSnippetCollection): Promise<void> {
     const allSnippets: Array<{ label: string; description: string; detail: string; snippet: DroolsSnippet }> = [];
-    
+
     // Add built-in snippets
     for (const [name, snippet] of Object.entries(builtIn)) {
         allSnippets.push({
@@ -643,7 +643,7 @@ async function viewAllSnippets(builtIn: DroolsSnippetCollection, custom: DroolsS
             snippet
         });
     }
-    
+
     // Add custom snippets
     for (const [name, snippet] of Object.entries(custom)) {
         allSnippets.push({
@@ -663,7 +663,7 @@ async function viewAllSnippets(builtIn: DroolsSnippetCollection, custom: DroolsS
     if (selectedSnippet) {
         const snippetPreview = selectedSnippet.snippet.body.join('\n');
         const message = `**${selectedSnippet.label}**\n\n**Prefix:** ${selectedSnippet.snippet.prefix}\n\n**Description:** ${selectedSnippet.snippet.description}\n\n**Body:**\n\`\`\`\n${snippetPreview}\n\`\`\``;
-        
+
         const action = await vscode.window.showInformationMessage(
             `Snippet Details:\n${selectedSnippet.snippet.description}\n\nPrefix: ${selectedSnippet.snippet.prefix}`,
             'Insert Snippet',
@@ -749,21 +749,21 @@ async function resetSnippetsToDefaults(context: vscode.ExtensionContext): Promis
 export function deactivate(): Thenable<void> | undefined {
     console.log('Drools VSCode Extension is now deactivated!');
     outputChannel.appendLine('Drools VSCode Extension deactivated');
-    
+
     // Dispose of fallback providers
     fallbackDisposables.forEach(disposable => disposable.dispose());
     fallbackDisposables = [];
-    
+
     // Dispose of configuration manager
     if (configManager) {
         configManager.dispose();
     }
-    
+
     if (!client) {
         outputChannel.dispose();
         return undefined;
     }
-    
+
     return client.stop().then(() => {
         outputChannel.appendLine('Language server stopped successfully');
         outputChannel.dispose();

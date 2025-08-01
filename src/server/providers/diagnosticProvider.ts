@@ -77,26 +77,289 @@ export class DroolsDiagnosticProvider {
     }
 
     /**
-     * Validate semantic correctness of the AST
+     * Validate semantic correctness according to official Drools specification
+     * Based on https://github.com/kiegroup/drools/ implementation
      */
     private validateSemantics(ast: DroolsAST, diagnostics: Diagnostic[]): void {
-        // Check for duplicate rule names
+        // Core semantic validations based on Drools language specification
+        
+        // 1. Validate package declaration (optional but if present, must be valid)
+        this.validatePackageDeclaration(ast, diagnostics);
+        
+        // 2. Validate import statements
+        this.validateImportStatements(ast, diagnostics);
+        
+        // 3. Check for duplicate rule names (semantic error in Drools)
         this.validateDuplicateRuleNames(ast, diagnostics);
         
-        // Check for duplicate function names
+        // 4. Check for duplicate function names (semantic error in Drools)
         this.validateDuplicateFunctionNames(ast, diagnostics);
         
-        // Check for duplicate global names
+        // 5. Check for duplicate global names (semantic error in Drools)
         this.validateDuplicateGlobalNames(ast, diagnostics);
         
-        // Validate rule structure
-        this.validateRuleStructure(ast, diagnostics);
+        // 6. Validate rule structure according to Drools specification
+        this.validateDroolsRuleStructure(ast, diagnostics);
         
-        // Validate function structure
-        this.validateFunctionStructure(ast, diagnostics);
+        // 7. Validate function structure according to Drools specification
+        this.validateDroolsFunctionStructure(ast, diagnostics);
         
-        // Check for undefined variables in rules
-        this.validateVariableUsage(ast, diagnostics);
+        // 8. Validate rule attributes are valid Drools attributes
+        this.validateDroolsRuleAttributes(ast, diagnostics);
+        
+        // 9. Validate global variable declarations
+        this.validateGlobalDeclarations(ast, diagnostics);
+        
+        // Variable validation is intentionally disabled due to complexity of Drools variable scoping
+        // Drools has complex variable scoping rules that require deep understanding of:
+        // - Pattern binding variables ($var : Type)
+        // - Accumulate result variables
+        // - Collect result variables  
+        // - Nested pattern variables in exists/not/forall
+        // - Cross-rule variable references
+        // Until we can implement proper Drools variable scoping, this validation is disabled
+        // to prevent false positives
+    }
+
+    /**
+     * Validate package declaration according to Drools specification
+     */
+    private validatePackageDeclaration(ast: DroolsAST, diagnostics: Diagnostic[]): void {
+        if (ast.packageDeclaration) {
+            // Package name should follow Java package naming conventions
+            const packageName = ast.packageDeclaration.name;
+            if (packageName && !/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$/.test(packageName)) {
+                diagnostics.push({
+                    severity: DiagnosticSeverity.Warning,
+                    range: {
+                        start: { line: ast.packageDeclaration.range.start.line, character: ast.packageDeclaration.range.start.character },
+                        end: { line: ast.packageDeclaration.range.end.line, character: ast.packageDeclaration.range.end.character }
+                    },
+                    message: 'Package name should follow Java naming conventions (lowercase, dot-separated)',
+                    source: 'drools-semantic'
+                });
+            }
+        }
+    }
+
+    /**
+     * Validate import statements according to Drools specification
+     */
+    private validateImportStatements(ast: DroolsAST, diagnostics: Diagnostic[]): void {
+        const importPaths = new Set<string>();
+        
+        for (const importNode of ast.imports) {
+            // Check for duplicate imports
+            if (importPaths.has(importNode.path)) {
+                diagnostics.push({
+                    severity: DiagnosticSeverity.Warning,
+                    range: {
+                        start: { line: importNode.range.start.line, character: importNode.range.start.character },
+                        end: { line: importNode.range.end.line, character: importNode.range.end.character }
+                    },
+                    message: `Duplicate import: "${importNode.path}"`,
+                    source: 'drools-semantic'
+                });
+            } else {
+                importPaths.add(importNode.path);
+            }
+
+            // Validate import path format
+            if (importNode.path && !/^[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)*(\.\*)?$/.test(importNode.path)) {
+                diagnostics.push({
+                    severity: DiagnosticSeverity.Error,
+                    range: {
+                        start: { line: importNode.range.start.line, character: importNode.range.start.character },
+                        end: { line: importNode.range.end.line, character: importNode.range.end.character }
+                    },
+                    message: `Invalid import path: "${importNode.path}"`,
+                    source: 'drools-semantic'
+                });
+            }
+        }
+    }
+
+    /**
+     * Validate rule structure according to Drools specification
+     */
+    private validateDroolsRuleStructure(ast: DroolsAST, diagnostics: Diagnostic[]): void {
+        for (const rule of ast.rules) {
+            // Rule must have a name
+            if (!rule.name || rule.name.trim() === '') {
+                diagnostics.push({
+                    severity: DiagnosticSeverity.Error,
+                    range: {
+                        start: { line: rule.range.start.line, character: rule.range.start.character },
+                        end: { line: rule.range.end.line, character: rule.range.end.character }
+                    },
+                    message: 'Rule must have a name',
+                    source: 'drools-semantic'
+                });
+            }
+
+            // Rule name should be quoted if it contains spaces or special characters
+            if (rule.name && /[\s\-\.]/.test(rule.name) && !rule.name.startsWith('"')) {
+                diagnostics.push({
+                    severity: DiagnosticSeverity.Warning,
+                    range: {
+                        start: { line: rule.range.start.line, character: rule.range.start.character },
+                        end: { line: rule.range.end.line, character: rule.range.end.character }
+                    },
+                    message: 'Rule names with spaces or special characters should be quoted',
+                    source: 'drools-semantic'
+                });
+            }
+
+            // A rule should have at least a when or then clause (or both)
+            if (!rule.when && !rule.then) {
+                diagnostics.push({
+                    severity: DiagnosticSeverity.Error,
+                    range: {
+                        start: { line: rule.range.start.line, character: rule.range.start.character },
+                        end: { line: rule.range.end.line, character: rule.range.end.character }
+                    },
+                    message: 'Rule must have at least a when or then clause',
+                    source: 'drools-semantic'
+                });
+            }
+        }
+    }
+
+    /**
+     * Validate function structure according to Drools specification
+     */
+    private validateDroolsFunctionStructure(ast: DroolsAST, diagnostics: Diagnostic[]): void {
+        for (const func of ast.functions) {
+            // Function must have a name
+            if (!func.name || func.name.trim() === '') {
+                diagnostics.push({
+                    severity: DiagnosticSeverity.Error,
+                    range: {
+                        start: { line: func.range.start.line, character: func.range.start.character },
+                        end: { line: func.range.end.line, character: func.range.end.character }
+                    },
+                    message: 'Function must have a name',
+                    source: 'drools-semantic'
+                });
+            }
+
+            // Function must have a return type
+            if (!func.returnType || func.returnType.trim() === '') {
+                diagnostics.push({
+                    severity: DiagnosticSeverity.Error,
+                    range: {
+                        start: { line: func.range.start.line, character: func.range.start.character },
+                        end: { line: func.range.end.line, character: func.range.end.character }
+                    },
+                    message: 'Function must specify a return type',
+                    source: 'drools-semantic'
+                });
+            }
+
+            // Validate parameter structure
+            for (const param of func.parameters) {
+                if (!param.name || param.name.trim() === '') {
+                    diagnostics.push({
+                        severity: DiagnosticSeverity.Error,
+                        range: {
+                            start: { line: param.range.start.line, character: param.range.start.character },
+                            end: { line: param.range.end.line, character: param.range.end.character }
+                        },
+                        message: 'Function parameter must have a name',
+                        source: 'drools-semantic'
+                    });
+                }
+
+                if (!param.dataType || param.dataType.trim() === '') {
+                    diagnostics.push({
+                        severity: DiagnosticSeverity.Error,
+                        range: {
+                            start: { line: param.range.start.line, character: param.range.start.character },
+                            end: { line: param.range.end.line, character: param.range.end.character }
+                        },
+                        message: 'Function parameter must have a type',
+                        source: 'drools-semantic'
+                    });
+                }
+            }
+        }
+    }
+
+    /**
+     * Validate rule attributes according to Drools specification
+     */
+    private validateDroolsRuleAttributes(ast: DroolsAST, diagnostics: Diagnostic[]): void {
+        const validAttributes = [
+            'salience', 'no-loop', 'agenda-group', 'auto-focus', 'activation-group',
+            'ruleflow-group', 'lock-on-active', 'dialect', 'date-effective', 'date-expires',
+            'duration', 'timer', 'calendars', 'enabled'
+        ];
+
+        for (const rule of ast.rules) {
+            for (const attribute of rule.attributes) {
+                // Check if attribute name is valid
+                if (!validAttributes.includes(attribute.name)) {
+                    diagnostics.push({
+                        severity: DiagnosticSeverity.Warning,
+                        range: {
+                            start: { line: rule.range.start.line, character: rule.range.start.character },
+                            end: { line: rule.range.end.line, character: rule.range.end.character }
+                        },
+                        message: `Unknown rule attribute: "${attribute.name}". Valid attributes are: ${validAttributes.join(', ')}`,
+                        source: 'drools-semantic'
+                    });
+                }
+
+                // Validate attribute values based on type
+                this.validateAttributeValue(rule, attribute, diagnostics);
+            }
+        }
+    }
+
+    /**
+     * Validate global variable declarations according to Drools specification
+     */
+    private validateGlobalDeclarations(ast: DroolsAST, diagnostics: Diagnostic[]): void {
+        for (const global of ast.globals) {
+            // Global must have a name
+            if (!global.name || global.name.trim() === '') {
+                diagnostics.push({
+                    severity: DiagnosticSeverity.Error,
+                    range: {
+                        start: { line: global.range.start.line, character: global.range.start.character },
+                        end: { line: global.range.end.line, character: global.range.end.character }
+                    },
+                    message: 'Global variable must have a name',
+                    source: 'drools-semantic'
+                });
+            }
+
+            // Global must have a type
+            if (!global.dataType || global.dataType.trim() === '') {
+                diagnostics.push({
+                    severity: DiagnosticSeverity.Error,
+                    range: {
+                        start: { line: global.range.start.line, character: global.range.start.character },
+                        end: { line: global.range.end.line, character: global.range.end.character }
+                    },
+                    message: 'Global variable must have a type',
+                    source: 'drools-semantic'
+                });
+            }
+
+            // Global name should follow Java variable naming conventions
+            if (global.name && !/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(global.name)) {
+                diagnostics.push({
+                    severity: DiagnosticSeverity.Warning,
+                    range: {
+                        start: { line: global.range.start.line, character: global.range.start.character },
+                        end: { line: global.range.end.line, character: global.range.end.character }
+                    },
+                    message: 'Global variable name should follow Java naming conventions',
+                    source: 'drools-semantic'
+                });
+            }
+        }
     }
 
     /**
@@ -366,30 +629,56 @@ export class DroolsDiagnosticProvider {
                 continue;
             }
 
-            // Collect declared variables from when clause
+            // Collect declared variables from when clause (including nested patterns)
             const declaredVariables = new Set<string>();
-            for (const condition of rule.when.conditions) {
-                if (condition.variable) {
-                    declaredVariables.add(condition.variable);
-                }
-            }
+            
+            // Primary method: collect from AST conditions
+            this.collectVariablesFromConditions(rule.when.conditions, declaredVariables);
+
+            // Fallback method: collect directly from the when clause text
+            // This is crucial for cases where the parser might not have fully captured all variables
+            const whenContent = this.getWhenClauseContent(rule);
+            this.collectVariablesFromText(whenContent, declaredVariables);
+
+            // Additional fallback: collect from the entire rule text as last resort
+            const ruleContent = this.getRuleContent(rule);
+            this.collectVariablesFromText(ruleContent, declaredVariables);
+
+            // Debug logging (can be removed in production)
+            console.log(`Rule "${rule.name}" - Declared variables:`, Array.from(declaredVariables));
 
             // Check for variable usage in then clause
             const thenActions = rule.then.actions;
             const variableUsageRegex = /\$[a-zA-Z_][a-zA-Z0-9_]*/g;
             const usedVariables = thenActions.match(variableUsageRegex) || [];
 
+            // Debug logging (can be removed in production)
+            console.log(`Rule "${rule.name}" - Used variables:`, usedVariables);
+
             for (const usedVar of usedVariables) {
                 if (!declaredVariables.has(usedVar)) {
                     // Find the approximate position of the undefined variable
-                    const lineIndex = thenActions.split('\n').findIndex(line => line.includes(usedVar));
-                    const line = rule.then.range.start.line + lineIndex + 1;
+                    const thenLines = thenActions.split('\n');
+                    let lineIndex = -1;
+                    let charIndex = -1;
+                    
+                    for (let i = 0; i < thenLines.length; i++) {
+                        const index = thenLines[i].indexOf(usedVar);
+                        if (index !== -1) {
+                            lineIndex = i;
+                            charIndex = index;
+                            break;
+                        }
+                    }
+                    
+                    const line = rule.then.range.start.line + (lineIndex >= 0 ? lineIndex : 0);
+                    const character = charIndex >= 0 ? charIndex : 0;
                     
                     diagnostics.push({
                         severity: DiagnosticSeverity.Error,
                         range: {
-                            start: { line, character: 0 },
-                            end: { line, character: 100 }
+                            start: { line, character },
+                            end: { line, character: character + usedVar.length }
                         },
                         message: `Undefined variable: ${usedVar}`,
                         source: 'drools-semantic'
@@ -400,28 +689,136 @@ export class DroolsDiagnosticProvider {
     }
 
     /**
-     * Validate best practices and style guidelines
+     * Recursively collect variables from conditions, including nested multi-line patterns
      */
-    private validateBestPractices(ast: DroolsAST, diagnostics: Diagnostic[]): void {
-        // Check for rules without salience when multiple rules exist
-        if (ast.rules.length > 1) {
-            for (const rule of ast.rules) {
-                const hasSalience = rule.attributes.some(attr => attr.name === 'salience');
-                if (!hasSalience) {
-                    diagnostics.push({
-                        severity: DiagnosticSeverity.Information,
-                        range: {
-                            start: { line: rule.range.start.line, character: rule.range.start.character },
-                            end: { line: rule.range.end.line, character: rule.range.end.character }
-                        },
-                        message: 'Consider adding salience attribute when multiple rules exist',
-                        source: 'drools-best-practice'
-                    });
+    private collectVariablesFromConditions(conditions: ConditionNode[], declaredVariables: Set<string>): void {
+        for (const condition of conditions) {
+            // Add variable from current condition
+            if (condition.variable) {
+                declaredVariables.add(condition.variable);
+            }
+
+            // Extract variables from condition content using regex
+            // This handles cases where variables might be declared within the condition text
+            const variableRegex = /\$[a-zA-Z_][a-zA-Z0-9_]*\s*:/g;
+            const matches = condition.content.match(variableRegex);
+            if (matches) {
+                for (const match of matches) {
+                    const variable = match.replace(':', '').trim();
+                    declaredVariables.add(variable);
+                }
+            }
+
+            // Recursively collect from nested conditions (multi-line patterns)
+            if (condition.nestedConditions && condition.nestedConditions.length > 0) {
+                this.collectVariablesFromConditions(condition.nestedConditions, declaredVariables);
+            }
+
+            // Collect from multi-line pattern inner conditions
+            if (condition.multiLinePattern && condition.multiLinePattern.innerConditions) {
+                this.collectVariablesFromConditions(condition.multiLinePattern.innerConditions, declaredVariables);
+            }
+
+            // Additional parsing for complex multi-line patterns
+            if (condition.isMultiLine && condition.content) {
+                this.extractVariablesFromMultiLineContent(condition.content, declaredVariables);
+            }
+        }
+    }
+
+    /**
+     * Extract variables from multi-line pattern content
+     */
+    private extractVariablesFromMultiLineContent(content: string, declaredVariables: Set<string>): void {
+        // Pattern to match variable declarations in multi-line patterns
+        // Matches patterns like: $variable : FactType(...) or $var : Type
+        const variableDeclarationRegex = /\$[a-zA-Z_][a-zA-Z0-9_]*\s*:\s*[a-zA-Z_][a-zA-Z0-9_.]*/g;
+        const matches = content.match(variableDeclarationRegex);
+        
+        if (matches) {
+            for (const match of matches) {
+                const variable = match.split(':')[0].trim();
+                if (variable.startsWith('$')) {
+                    declaredVariables.add(variable);
                 }
             }
         }
 
-        // Check for rules that might cause infinite loops
+        // Also look for simple variable bindings without explicit type
+        const simpleVariableRegex = /\$[a-zA-Z_][a-zA-Z0-9_]*(?=\s*[=:])/g;
+        const simpleMatches = content.match(simpleVariableRegex);
+        
+        if (simpleMatches) {
+            for (const variable of simpleMatches) {
+                declaredVariables.add(variable.trim());
+            }
+        }
+    }
+
+    /**
+     * Get the raw content of the when clause from the document
+     */
+    private getWhenClauseContent(rule: RuleNode): string {
+        if (!rule.when) {
+            return '';
+        }
+
+        const startLine = rule.when.range.start.line;
+        const endLine = rule.when.range.end.line;
+        
+        let content = '';
+        for (let i = startLine; i <= endLine && i < this.documentLines.length; i++) {
+            content += this.documentLines[i] + '\n';
+        }
+        
+        return content;
+    }
+
+    /**
+     * Extract variables from text content using regex (fallback method)
+     */
+    private collectVariablesFromText(text: string, declaredVariables: Set<string>): void {
+        // Pattern to match variable declarations: $variableName : FactType
+        const variableDeclarationRegex = /\$([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g;
+        let match;
+        
+        while ((match = variableDeclarationRegex.exec(text)) !== null) {
+            declaredVariables.add('$' + match[1]);
+        }
+
+        // Also match variables in simple patterns without explicit typing
+        // This handles cases like: $var = someExpression
+        const simpleVariableRegex = /\$([a-zA-Z_][a-zA-Z0-9_]*)\s*=/g;
+        let simpleMatch;
+        
+        while ((simpleMatch = simpleVariableRegex.exec(text)) !== null) {
+            declaredVariables.add('$' + simpleMatch[1]);
+        }
+    }
+
+    /**
+     * Get the raw content of the entire rule from the document
+     */
+    private getRuleContent(rule: RuleNode): string {
+        const startLine = rule.range.start.line;
+        const endLine = rule.range.end.line;
+        
+        let content = '';
+        for (let i = startLine; i <= endLine && i < this.documentLines.length; i++) {
+            content += this.documentLines[i] + '\n';
+        }
+        
+        return content;
+    }
+
+    /**
+     * Validate best practices and style guidelines according to Drools documentation
+     */
+    private validateBestPractices(ast: DroolsAST, diagnostics: Diagnostic[]): void {
+        // Note: Salience is NOT required in Drools rules. It's only needed when you want to control rule execution order.
+        // According to the official Drools documentation, salience is completely optional.
+
+        // Check for rules that might cause infinite loops (actual best practice)
         for (const rule of ast.rules) {
             const hasNoLoop = rule.attributes.some(attr => attr.name === 'no-loop');
             if (!hasNoLoop && rule.then) {
@@ -440,6 +837,12 @@ export class DroolsDiagnosticProvider {
                 }
             }
         }
+
+        // Validate rule attributes according to Drools specification
+        this.validateRuleAttributes(ast, diagnostics);
+
+        // Check for potential performance issues
+        this.validatePerformanceIssues(ast, diagnostics);
 
         // Check for unused global variables
         const globalNames = new Set(ast.globals.map(g => g.name));
@@ -1039,5 +1442,146 @@ export class DroolsDiagnosticProvider {
 
         // Limit the number of diagnostics
         return diagnostics.slice(0, this.settings.maxNumberOfProblems);
+    }
+
+    /**
+     * Validate rule attributes according to Drools specification
+     */
+    private validateRuleAttributes(ast: DroolsAST, diagnostics: Diagnostic[]): void {
+        for (const rule of ast.rules) {
+            for (const attribute of rule.attributes) {
+                this.validateSingleRuleAttribute(rule, attribute, diagnostics);
+            }
+        }
+    }
+
+    /**
+     * Validate a single rule attribute
+     */
+    private validateSingleRuleAttribute(rule: RuleNode, attribute: any, diagnostics: Diagnostic[]): void {
+        const validAttributes = [
+            'salience', 'no-loop', 'agenda-group', 'auto-focus', 'activation-group',
+            'ruleflow-group', 'lock-on-active', 'dialect', 'date-effective', 'date-expires',
+            'duration', 'timer', 'calendars', 'enabled'
+        ];
+
+        if (!validAttributes.includes(attribute.name)) {
+            diagnostics.push({
+                severity: DiagnosticSeverity.Warning,
+                range: {
+                    start: { line: attribute.range?.start.line || rule.range.start.line, character: attribute.range?.start.character || 0 },
+                    end: { line: attribute.range?.end.line || rule.range.start.line, character: attribute.range?.end.character || 100 }
+                },
+                message: `Unknown rule attribute: "${attribute.name}". Valid attributes are: ${validAttributes.join(', ')}`,
+                source: 'drools-semantic'
+            });
+        }
+
+        // Validate attribute values
+        this.validateAttributeValue(rule, attribute, diagnostics);
+    }
+
+    /**
+     * Validate rule attribute values
+     */
+    private validateAttributeValue(rule: RuleNode, attribute: any, diagnostics: Diagnostic[]): void {
+        switch (attribute.name) {
+            case 'salience':
+                if (attribute.value !== undefined && typeof attribute.value !== 'number') {
+                    diagnostics.push({
+                        severity: DiagnosticSeverity.Error,
+                        range: {
+                            start: { line: attribute.range?.start.line || rule.range.start.line, character: attribute.range?.start.character || 0 },
+                            end: { line: attribute.range?.end.line || rule.range.start.line, character: attribute.range?.end.character || 100 }
+                        },
+                        message: 'Salience value must be a number',
+                        source: 'drools-semantic'
+                    });
+                }
+                break;
+            case 'no-loop':
+            case 'auto-focus':
+            case 'lock-on-active':
+            case 'enabled':
+                if (attribute.value !== undefined && typeof attribute.value !== 'boolean') {
+                    diagnostics.push({
+                        severity: DiagnosticSeverity.Error,
+                        range: {
+                            start: { line: attribute.range?.start.line || rule.range.start.line, character: attribute.range?.start.character || 0 },
+                            end: { line: attribute.range?.end.line || rule.range.start.line, character: attribute.range?.end.character || 100 }
+                        },
+                        message: `${attribute.name} value must be true or false`,
+                        source: 'drools-semantic'
+                    });
+                }
+                break;
+            case 'dialect':
+                if (attribute.value && !['java', 'mvel'].includes(attribute.value.toLowerCase())) {
+                    diagnostics.push({
+                        severity: DiagnosticSeverity.Warning,
+                        range: {
+                            start: { line: attribute.range?.start.line || rule.range.start.line, character: attribute.range?.start.character || 0 },
+                            end: { line: attribute.range?.end.line || rule.range.start.line, character: attribute.range?.end.character || 100 }
+                        },
+                        message: 'Dialect should be "java" or "mvel"',
+                        source: 'drools-semantic'
+                    });
+                }
+                break;
+        }
+    }
+
+    /**
+     * Check for potential performance issues
+     */
+    private validatePerformanceIssues(ast: DroolsAST, diagnostics: Diagnostic[]): void {
+        for (const rule of ast.rules) {
+            // Check for overly complex conditions
+            if (rule.when && rule.when.conditions.length > 10) {
+                diagnostics.push({
+                    severity: DiagnosticSeverity.Information,
+                    range: {
+                        start: { line: rule.when.range.start.line, character: rule.when.range.start.character },
+                        end: { line: rule.when.range.end.line, character: rule.when.range.end.character }
+                    },
+                    message: `Rule has many conditions (${rule.when.conditions.length}). Consider breaking into multiple rules for better performance`,
+                    source: 'drools-performance'
+                });
+            }
+
+            // Check for potentially expensive operations in conditions
+            if (rule.when) {
+                for (const condition of rule.when.conditions) {
+                    if (condition.content.includes('matches') || condition.content.includes('contains')) {
+                        diagnostics.push({
+                            severity: DiagnosticSeverity.Information,
+                            range: {
+                                start: { line: condition.range.start.line, character: condition.range.start.character },
+                                end: { line: condition.range.end.line, character: condition.range.end.character }
+                            },
+                            message: 'String operations like "matches" and "contains" can be expensive. Consider using more specific constraints',
+                            source: 'drools-performance'
+                        });
+                    }
+                }
+            }
+
+            // Check for eval usage (generally discouraged for performance)
+            if (rule.when) {
+                for (const condition of rule.when.conditions) {
+                    if (condition.conditionType === 'eval') {
+                        diagnostics.push({
+                            severity: DiagnosticSeverity.Information,
+                            range: {
+                                start: { line: condition.range.start.line, character: condition.range.start.character },
+                                end: { line: condition.range.end.line, character: condition.range.end.character }
+                            },
+                            message: 'eval() can impact performance. Consider using pattern constraints instead',
+                            source: 'drools-performance'
+                        });
+                    }
+                }
+            }
+        }
     }
 }
