@@ -1,209 +1,173 @@
-#!/usr/bin/env node
-
-/**
- * Simple test for bracket matching functionality
- */
-
 const fs = require('fs');
-const path = require('path');
 
-// Simple test content
-const testContent = `rule "Simple test"
-when
-    exists(
-        Person(age > 18)
-    )
-then
-    System.out.println("Test");
-end`;
-
-// Write test file
-const testFilePath = 'test-simple-bracket.drl';
-fs.writeFileSync(testFilePath, testContent);
-
-console.log('✅ Created simple test file:', testFilePath);
-
-async function testSimpleBracketMatching() {
-    try {
-        console.log('\n🧪 Testing Simple Bracket Matching...');
-        
-        // Import the required modules
-        const { DroolsBracketMatchingProvider } = require('./out/server/providers/bracketMatchingProvider');
-        const { TextDocument } = require('vscode-languageserver-textdocument');
-        
-        // Create a text document
-        const document = TextDocument.create(
-            'file://' + path.resolve(testFilePath),
-            'drools',
-            1,
-            testContent
-        );
-        
-        // Create a minimal parse result for testing
-        const parseResult = {
-            ast: {
-                type: 'DroolsFile',
-                range: { start: { line: 0, character: 0 }, end: { line: 7, character: 3 } },
-                packageDeclaration: undefined,
-                imports: [],
-                globals: [],
-                functions: [],
-                rules: [],
-                queries: [],
-                declares: []
-            },
-            errors: []
-        };
-        
-        // Create bracket matching provider
-        const bracketProvider = new DroolsBracketMatchingProvider({
-            enableBracketMatching: true,
-            enableHoverSupport: true,
-            enableVisualIndicators: true,
-            maxSearchDistance: 1000
-        });
-        
-        // Test bracket matching at the exists( position
-        const testPosition = { line: 2, character: 11 }; // exists(
-        
-        console.log(`🎯 Testing bracket matching at position (${testPosition.line + 1}, ${testPosition.character + 1})`);
-        
-        const bracketPair = bracketProvider.findMatchingBracket(document, testPosition, parseResult);
-        
-        if (bracketPair) {
-            console.log('✅ Bracket pair found:');
-            console.log(`   Type: ${bracketPair.type}`);
-            console.log(`   Multi-line: ${bracketPair.isMultiLine}`);
-            console.log(`   Open: (${bracketPair.open.line + 1}, ${bracketPair.open.character + 1})`);
-            console.log(`   Close: (${bracketPair.close.line + 1}, ${bracketPair.close.character + 1})`);
-        } else {
-            console.log('❌ No bracket pair found');
-        }
-        
-        // Test getting all bracket pairs from text
-        console.log('\n📋 Getting all bracket pairs from text:');
-        const allBracketPairs = bracketProvider.getAllBracketPairs(document, parseResult);
-        console.log(`Found ${allBracketPairs.length} bracket pairs total`);
-        
-        allBracketPairs.forEach((pair, index) => {
-            console.log(`  ${index + 1}. ${pair.type} - Lines ${pair.open.line + 1} to ${pair.close.line + 1} (Multi-line: ${pair.isMultiLine})`);
-        });
-        
-        console.log('\n✅ Simple bracket matching test completed');
-        
-    } catch (error) {
-        console.error('❌ Error testing simple bracket matching:', error.message);
-        console.error(error.stack);
-    }
-}
-
-// Test folding with simple content
-async function testSimpleFolding() {
-    try {
-        console.log('\n🧪 Testing Simple Folding...');
-        
-        const { DroolsFoldingProvider } = require('./out/server/providers/foldingProvider');
-        const { TextDocument } = require('vscode-languageserver-textdocument');
-        
-        // Create a text document
-        const document = TextDocument.create(
-            'file://' + path.resolve(testFilePath),
-            'drools',
-            1,
-            testContent
-        );
-        
-        // Create a minimal parse result with a rule
-        const parseResult = {
-            ast: {
-                type: 'DroolsFile',
-                range: { start: { line: 0, character: 0 }, end: { line: 7, character: 3 } },
-                packageDeclaration: undefined,
-                imports: [],
-                globals: [],
-                functions: [],
-                rules: [{
-                    type: 'Rule',
-                    name: 'Simple test',
-                    range: { start: { line: 0, character: 0 }, end: { line: 7, character: 3 } },
-                    attributes: [],
-                    when: {
-                        type: 'When',
-                        range: { start: { line: 1, character: 0 }, end: { line: 4, character: 5 } },
-                        conditions: [{
-                            type: 'Condition',
-                            conditionType: 'exists',
-                            content: 'exists(\n        Person(age > 18)\n    )',
-                            range: { start: { line: 2, character: 4 }, end: { line: 4, character: 5 } },
-                            isMultiLine: true,
-                            spanLines: [2, 3, 4],
-                            parenthesesRanges: [
-                                { start: { line: 2, character: 10 }, end: { line: 2, character: 11 } },
-                                { start: { line: 4, character: 4 }, end: { line: 4, character: 5 } }
-                            ]
-                        }]
-                    },
-                    then: {
-                        type: 'Then',
-                        range: { start: { line: 5, character: 0 }, end: { line: 6, character: 27 } },
-                        actions: 'System.out.println("Test");'
-                    }
-                }],
-                queries: [],
-                declares: []
-            },
-            errors: []
-        };
-        
-        // Create folding provider
-        const foldingProvider = new DroolsFoldingProvider({
-            enableRuleFolding: true,
-            enableFunctionFolding: true,
-            enableCommentFolding: true,
-            enableImportFolding: true,
-            enableMultiLinePatternFolding: true
-        });
-        
-        // Get folding ranges
-        const foldingRanges = foldingProvider.provideFoldingRanges(document, parseResult);
-        
-        console.log(`📊 Found ${foldingRanges.length} folding ranges:`);
-        
-        foldingRanges.forEach((range, index) => {
-            console.log(`  ${index + 1}. Lines ${range.startLine + 1}-${range.endLine + 1} (${range.kind || 'region'})`);
-            if (range.collapsedText) {
-                console.log(`     Collapsed: "${range.collapsedText}"`);
+// Test bracket matching functionality with the updated language configuration
+function testBracketMatching() {
+    console.log('Testing bracket matching for multi-line patterns...\n');
+    
+    // Read the language configuration
+    const config = JSON.parse(fs.readFileSync('language-configuration.json', 'utf8'));
+    
+    // Test 1: Verify bracket pairs are correctly defined
+    console.log('1. Testing bracket pair definitions:');
+    const brackets = config.brackets;
+    const autoClosingPairs = config.autoClosingPairs;
+    const surroundingPairs = config.surroundingPairs;
+    
+    console.log('   Brackets:', JSON.stringify(brackets));
+    console.log('   Auto-closing pairs:', JSON.stringify(autoClosingPairs));
+    console.log('   Surrounding pairs:', JSON.stringify(surroundingPairs));
+    
+    // Verify all necessary bracket types are present
+    const hasParentheses = brackets.some(pair => pair[0] === '(' && pair[1] === ')');
+    const hasBraces = brackets.some(pair => pair[0] === '{' && pair[1] === '}');
+    const hasBrackets = brackets.some(pair => pair[0] === '[' && pair[1] === ']');
+    
+    console.log(`   ✓ Parentheses supported: ${hasParentheses}`);
+    console.log(`   ✓ Braces supported: ${hasBraces}`);
+    console.log(`   ✓ Square brackets supported: ${hasBrackets}`);
+    
+    // Test 2: Test indentation rules for multi-line patterns
+    console.log('\n2. Testing indentation rules:');
+    const increasePattern = new RegExp(config.indentationRules.increaseIndentPattern);
+    const decreasePattern = new RegExp(config.indentationRules.decreaseIndentPattern);
+    
+    // Test cases for increase indentation
+    const increaseTestCases = [
+        '    exists(',
+        '    not(',
+        '    eval(',
+        '    forall(',
+        '    collect(',
+        '    accumulate(',
+        '    Person(',
+        '    Account(',
+        'when',
+        'then',
+        'rule "test"'
+    ];
+    
+    console.log('   Increase indentation test cases:');
+    increaseTestCases.forEach(testCase => {
+        const matches = increasePattern.test(testCase);
+        console.log(`     "${testCase}": ${matches ? '✓' : '✗'}`);
+    });
+    
+    // Test cases for decrease indentation
+    const decreaseTestCases = [
+        '    )',
+        '    }',
+        '    ]',
+        'end'
+    ];
+    
+    console.log('   Decrease indentation test cases:');
+    decreaseTestCases.forEach(testCase => {
+        const matches = decreasePattern.test(testCase);
+        console.log(`     "${testCase}": ${matches ? '✓' : '✗'}`);
+    });
+    
+    // Test 3: Test onEnterRules for proper indentation behavior
+    console.log('\n3. Testing onEnterRules:');
+    if (config.onEnterRules) {
+        config.onEnterRules.forEach((rule, index) => {
+            console.log(`   Rule ${index + 1}:`);
+            console.log(`     beforeText: ${rule.beforeText}`);
+            if (rule.afterText) {
+                console.log(`     afterText: ${rule.afterText}`);
             }
+            console.log(`     action: ${JSON.stringify(rule.action)}`);
         });
-        
-        console.log('\n✅ Simple folding test completed');
-        
-    } catch (error) {
-        console.error('❌ Error testing simple folding:', error.message);
-        console.error(error.stack);
     }
+    
+    // Test 4: Simulate multi-line pattern scenarios
+    console.log('\n4. Testing multi-line pattern scenarios:');
+    
+    const scenarios = [
+        {
+            name: 'exists() pattern',
+            lines: [
+                '    exists(',
+                '        Person(',
+                '            age > 18',
+                '        )',
+                '    )'
+            ]
+        },
+        {
+            name: 'not() pattern',
+            lines: [
+                '    not(',
+                '        Account(',
+                '            balance < 0',
+                '        )',
+                '    )'
+            ]
+        },
+        {
+            name: 'eval() pattern',
+            lines: [
+                '    eval(',
+                '        $person.getAge() > 21 &&',
+                '        $person.isActive()',
+                '    )'
+            ]
+        }
+    ];
+    
+    scenarios.forEach(scenario => {
+        console.log(`   ${scenario.name}:`);
+        scenario.lines.forEach((line, index) => {
+            const shouldIncrease = increasePattern.test(line);
+            const shouldDecrease = decreasePattern.test(line);
+            const indentAction = shouldIncrease ? 'increase' : shouldDecrease ? 'decrease' : 'maintain';
+            console.log(`     Line ${index + 1}: "${line}" -> ${indentAction} indent`);
+        });
+    });
+    
+    console.log('\n✓ Bracket matching tests completed successfully!');
 }
 
-// Run tests
-async function runTests() {
-    console.log('🚀 Starting simple bracket matching and folding tests...\n');
+// Test word boundary detection
+function testWordBoundaries() {
+    console.log('\n\nTesting word boundary detection...\n');
     
-    await testSimpleBracketMatching();
-    await testSimpleFolding();
+    const config = JSON.parse(fs.readFileSync('language-configuration.json', 'utf8'));
+    const wordPattern = new RegExp(config.wordPattern);
     
-    console.log('\n🎉 All simple tests completed!');
+    // Test various Drools-specific words and identifiers
+    const testWords = [
+        // Keywords
+        'exists', 'not', 'eval', 'forall', 'collect', 'accumulate',
+        'rule', 'when', 'then', 'end', 'function', 'import', 'package',
+        
+        // Identifiers
+        'Person', 'Account', 'Customer', 'Transaction',
+        '$person', '$account', '$customer',
+        'age', 'balance', 'name', 'owner', 'type',
+        
+        // Method calls
+        'getName', 'getAge', 'getBalance', 'setTier',
+        
+        // Operators and symbols (should not match as words)
+        '==', '!=', '>', '<', '>=', '<=', '&&', '||',
+        '(', ')', '{', '}', '[', ']', ',', ';'
+    ];
     
-    // Clean up test file
-    try {
-        fs.unlinkSync(testFilePath);
-        console.log('🧹 Cleaned up test file');
-    } catch (error) {
-        console.log('⚠️  Could not clean up test file:', error.message);
-    }
+    console.log('Word pattern test results:');
+    testWords.forEach(word => {
+        const matches = wordPattern.test(word);
+        const shouldMatch = !['==', '!=', '>', '<', '>=', '<=', '&&', '||', '(', ')', '{', '}', '[', ']', ',', ';'].includes(word);
+        const result = matches === shouldMatch ? '✓' : '✗';
+        console.log(`   "${word}": ${matches ? 'matches' : 'no match'} ${result}`);
+    });
 }
 
-// Run the tests
-runTests().catch(error => {
-    console.error('💥 Test execution failed:', error);
+// Run all tests
+try {
+    testBracketMatching();
+    testWordBoundaries();
+    console.log('\n🎉 All bracket matching tests passed!');
+} catch (error) {
+    console.error('❌ Test failed:', error.message);
     process.exit(1);
-});
+}

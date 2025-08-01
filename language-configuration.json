@@ -23,9 +23,30 @@
         ["'", "'"]
     ],
     "indentationRules": {
-        "increaseIndentPattern": "^\\s*(rule\\s+|when\\s*$|then\\s*$|function\\s+|.*\\{[^}\"'`]*|.*\\([^)\"'`]*|.*\\[[^\\]\"'`]*)$",
-        "decreaseIndentPattern": "^\\s*(end\\s*$|.*\\}.*|.*\\).*|.*\\].*)$"
+        "increaseIndentPattern": "^\\s*(rule\\s+|when\\s*$|then\\s*$|function\\s+|.*\\{[^}\"'`]*$|.*\\([^)\"'`]*$|.*\\[[^\\]\"'`]*$|\\s*(exists|not|eval|forall|collect|accumulate)\\s*\\([^)]*$)",
+        "decreaseIndentPattern": "^\\s*(end\\s*$|\\s*\\}\\s*$|\\s*\\)\\s*$|\\s*\\]\\s*$)"
     },
+    "onEnterRules": [
+        {
+            "beforeText": "^\\s*(exists|not|eval|forall|collect|accumulate)\\s*\\([^)]*$",
+            "action": {
+                "indent": "indent"
+            }
+        },
+        {
+            "beforeText": "^\\s*[^()]*\\([^)]*$",
+            "afterText": "^\\s*\\)",
+            "action": {
+                "indent": "indent"
+            }
+        },
+        {
+            "beforeText": "^\\s*(when|then)\\s*$",
+            "action": {
+                "indent": "indent"
+            }
+        }
+    ],
     "folding": {
         "markers": {
             "start": "^\\s*//\\s*#?region\\b",

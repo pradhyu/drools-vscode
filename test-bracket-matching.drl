@@ -1,133 +1,74 @@
-package com.example.rules;
+package com.example.test;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import com.example.Person;
+import com.example.Account;
 
-global java.util.List globalList;
-
-/*
- * Multi-line block comment
- * with various brackets: () [] {}
- */
-
-// Function with nested brackets
-function String processData(String input, Map<String, Object> data) {
-    if (input != null && data.containsKey("key")) {
-        List<String> items = (List<String>) data.get("items");
-        return items.stream()
-            .filter(item -> item.length() > 0)
-            .map(item -> item.toUpperCase())
-            .collect(Collectors.toList())
-            .toString();
-    }
-    return "default";
-}
-
-rule "Bracket Matching Test Rule"
-    salience 100
-    no-loop true
+rule "Test multi-line bracket matching"
 when
     $person : Person(
         age > 18,
-        name != null,
-        addresses.size() > 0
-    )
-    $account : Account(
-        owner == $person,
-        balance > 1000,
-        type in ("CHECKING", "SAVINGS")
-    )
-    exists(
-        Transaction(
-            account == $account,
-            amount > 500,
-            date after "01-Jan-2023"
-        )
-    )
-then
-    // Nested brackets in actions
-    Map<String, Object> data = new HashMap<>();
-    data.put("customer", $person.getName());
-    data.put("balance", $account.getBalance());
-    
-    List<String> notifications = Arrays.asList(
-        "Account activated",
-        "Welcome bonus applied"
-    );
-    
-    for (String notification : notifications) {
-        insert(new Notification($person, notification));
-    }
-    
-    // Complex nested structure
-    if ($account.getType().equals("PREMIUM")) {
-        $person.getBenefits().add(
-            new Benefit(
-                "PREMIUM_ACCESS",
-                calculateBenefitValue($account.getBalance())
-            )
-        );
-    }
-end
-
-rule "Nested Conditions Rule"
-when
-    $customer : Customer(
-        status == "ACTIVE",
-        (age >= 21 && creditScore > 700) || 
-        (age >= 18 && hasGuarantor == true)
+        name != null
     )
     exists(
         Account(
-            owner == $customer,
-            type == "PREMIUM",
-            balance > 10000
-        ) and
-        CreditCheck(
-            customer == $customer,
-            score > 750,
-            date after "01-Jan-2023"
+            owner == $person,
+            balance > 1000,
+            type in ("CHECKING", "SAVINGS")
         )
     )
     not(
         Restriction(
-            customer == $customer,
-            type in ("CREDIT_HOLD", "ACCOUNT_FREEZE"),
+            customer == $person,
             active == true
         )
     )
+    eval(
+        $person.getAge() >= 21 &&
+        $person.getCreditScore() > 700
+    )
 then
-    // Complex action with multiple bracket levels
-    Map<String, List<String>> benefitMap = new HashMap<String, List<String>>() {{
-        put("PLATINUM", Arrays.asList("LOUNGE_ACCESS", "PRIORITY_SUPPORT"));
-        put("GOLD", Arrays.asList("CASHBACK", "REWARDS"));
-    }};
-    
-    $customer.setTier("PLATINUM");
-    
-    // Nested method calls with brackets
-    benefitMap.get("PLATINUM").forEach(benefit -> {
-        insert(new Benefit($customer, benefit));
-    });
+    System.out.println("All conditions met");
 end
 
-query "findCustomersWithBrackets"(String status, int minAge)
+rule "Test nested multi-line patterns"
+when
     $customer : Customer(
-        status == status,
-        age >= minAge,
-        accounts.size() > 0
+        status == "ACTIVE"
     )
-    $account : Account(
-        owner == $customer,
-        balance > 0,
-        transactions.size() > 10
+    exists(
+        Account(
+            owner == $customer
+        ) and
+        not(
+            Debt(
+                person == $customer,
+                amount > 1000
+            )
+        )
     )
+then
+    $customer.setTier("PREMIUM");
 end
 
-declare ComplexEvent
-    customer : Customer
-    data : Map<String, Object>
-    tags : List<String>
-    metadata : Map<String, List<String>>
+rule "Test complex nested brackets"
+when
+    $person : Person()
+    exists(
+        Account(
+            owner == $person,
+            type == "PREMIUM"
+        ) and
+        forall(
+            Transaction(
+                account.owner == $person,
+                amount > 100
+            )
+            CreditCheck(
+                customer == $person,
+                approved == true
+            )
+        )
+    )
+then
+    System.out.println("Complex pattern matched");
 end

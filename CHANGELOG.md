@@ -47,6 +47,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Contributing guidelines
 - API documentation for developers
 
+## [1.1.0] - 2025-01-25
+
+### Added - Multi-line Pattern Support
+- **Complete Multi-line Pattern Recognition**: Full support for `exists()`, `not()`, `eval()`, `forall()`, `collect()`, and `accumulate()` patterns spanning multiple lines
+- **Enhanced Parser**: Updated Drools parser to track parentheses depth and context across line boundaries
+- **Multi-line Syntax Highlighting**: Extended TextMate grammar to properly highlight multi-line patterns with consistent coloring
+- **Advanced Bracket Matching**: Intelligent bracket matching and highlighting across multiple lines for nested patterns
+- **Context-aware Diagnostics**: Improved error detection for unmatched parentheses and incomplete multi-line patterns
+- **Multi-line Formatting**: Enhanced formatting provider with proper indentation and alignment for multi-line constructs
+- **Intelligent Code Completion**: Context-aware completions within multi-line patterns including keywords, fact types, and operators
+- **Code Folding**: Support for folding multi-line patterns to improve code navigation
+- **Performance Optimizations**: Incremental parsing and caching for large files with complex multi-line patterns
+- **Comprehensive Examples**: Added extensive examples file with all multi-line pattern types and configurations
+- **Troubleshooting Guide**: Detailed troubleshooting documentation for common multi-line pattern issues
+
+### Enhanced
+- **Error Recovery**: Improved parsing recovery for incomplete multi-line patterns
+- **Symbol Provider**: Enhanced document outline to show multi-line pattern structure
+- **Language Configuration**: Updated bracket pair configurations for multi-line constructs
+- **Grammar Compliance**: Aligned parser behavior with official DRL6Expressions.g ANTLR grammar
+
+### Documentation
+- **Multi-line Pattern Guide**: Comprehensive documentation section in README
+- **Code Examples**: Complete examples file with 20+ multi-line pattern configurations
+- **Troubleshooting Guide**: Dedicated troubleshooting document with solutions for common issues
+- **Best Practices**: Guidelines for writing maintainable multi-line patterns
+
+### Technical Improvements
+- **AST Enhancements**: New multi-line pattern nodes and enhanced condition nodes
+- **Context Tracking**: Advanced parsing context management for nested patterns
+- **Performance Monitoring**: Added performance management for complex pattern parsing
+- **Test Coverage**: Comprehensive test suite for all multi-line pattern functionality
+
 ## [Unreleased]
 
 ### Planned

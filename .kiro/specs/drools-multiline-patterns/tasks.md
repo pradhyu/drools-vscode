@@ -70,35 +70,35 @@
   - Create memory management strategies for complex nested patterns
   - _Requirements: Performance aspects of all requirements_
 
-- [ ] 11. Add integration tests for multi-line pattern edge cases
+- [x] 11. Add integration tests for multi-line pattern edge cases
   - Test deeply nested multi-line patterns (exists within not within eval)
   - Verify handling of mixed single-line and multi-line patterns in same rule
   - Test formatting behavior with various indentation styles
   - Validate completion behavior at different positions within multi-line patterns
   - _Requirements: 6.3, 6.4_
 
-- [ ] 12. Update language configuration for improved bracket matching
+- [x] 12. Update language configuration for improved bracket matching
   - Modify language-configuration.json to support multi-line bracket pairs
   - Add auto-closing pair configurations for multi-line patterns
   - Update comment and indentation rules to work with multi-line constructs
   - Ensure proper word boundary detection within multi-line patterns
   - _Requirements: 2.4, 5.1_
 
-- [ ] 13. Implement context-aware symbol provider for multi-line patterns
+- [x] 13. Implement context-aware symbol provider for multi-line patterns
   - Update document symbol detection to recognize multi-line patterns as single units
   - Add outline support showing multi-line pattern structure
   - Implement go-to-definition that works across multi-line pattern boundaries
   - Create workspace symbol search that includes multi-line pattern content
   - _Requirements: 1.3, 4.4_
 
-- [ ] 14. Add validation against official ANTLR grammar rules
+- [x] 14. Add validation against official ANTLR grammar rules
   - Cross-reference parser behavior with DRL6Expressions.g grammar
   - Implement validation tests using official Drools test cases
   - Ensure compliance with ANTLR-defined expression parsing rules
   - Add grammar rule documentation and comments in parser code
   - _Requirements: 6.1, 6.2, 6.3, 6.4_
 
-- [ ] 15. Create comprehensive documentation and examples
+- [x] 15. Create comprehensive documentation and examples
   - Document multi-line pattern syntax support in README
   - Add code examples showing various multi-line pattern configurations
   - Create troubleshooting guide for common multi-line pattern issues

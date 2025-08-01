@@ -21,7 +21,10 @@ import {
     PackageNode,
     QueryNode,
     DeclareNode,
-    AnyASTNode
+    AnyASTNode,
+    ConditionNode,
+    MultiLinePatternNode,
+    WhenNode
 } from '../parser/ast';
 import { ParseResult } from '../parser/droolsParser';
 
@@ -99,7 +102,7 @@ export class DroolsSymbolProvider {
     }
 
     /**
-     * Provide workspace symbols for cross-file navigation
+     * Provide workspace symbols for cross-file navigation with multi-line pattern support
      */
     public provideWorkspaceSymbols(
         params: WorkspaceSymbolParams,
@@ -124,6 +127,18 @@ export class DroolsSymbolProvider {
                         location: Location.create(uri, this.astRangeToLspRange(rule.range)),
                         containerName: ast.packageDeclaration?.name
                     });
+                }
+
+                // Search within rule conditions for multi-line patterns
+                if (rule.when) {
+                    const patternSymbols = this.searchMultiLinePatterns(
+                        rule.when.conditions, 
+                        query, 
+                        uri, 
+                        rule.name,
+                        ast.packageDeclaration?.name
+                    );
+                    symbols.push(...patternSymbols);
                 }
             }
 
@@ -161,6 +176,16 @@ export class DroolsSymbolProvider {
                         containerName: ast.packageDeclaration?.name
                     });
                 }
+
+                // Search within query conditions for multi-line patterns
+                const queryPatternSymbols = this.searchMultiLinePatterns(
+                    queryNode.conditions,
+                    query,
+                    uri,
+                    queryNode.name,
+                    ast.packageDeclaration?.name
+                );
+                symbols.push(...queryPatternSymbols);
             }
 
             // Search in declares
@@ -229,7 +254,7 @@ export class DroolsSymbolProvider {
     }
 
     /**
-     * Find definition in a specific document
+     * Find definition in a specific document with multi-line pattern support
      */
     private findDefinitionInDocument(
         uri: string,
@@ -243,6 +268,16 @@ export class DroolsSymbolProvider {
         for (const rule of ast.rules) {
             if (rule.name === word) {
                 locations.push(Location.create(uri, this.astRangeToLspRange(rule.range)));
+            }
+
+            // Search within rule conditions for multi-line patterns and variables
+            if (rule.when) {
+                const conditionLocations = this.findDefinitionInConditions(
+                    rule.when.conditions,
+                    word,
+                    uri
+                );
+                locations.push(...conditionLocations);
             }
         }
 
@@ -265,12 +300,27 @@ export class DroolsSymbolProvider {
             if (query.name === word) {
                 locations.push(Location.create(uri, this.astRangeToLspRange(query.range)));
             }
+
+            // Search within query conditions
+            const queryConditionLocations = this.findDefinitionInConditions(
+                query.conditions,
+                word,
+                uri
+            );
+            locations.push(...queryConditionLocations);
         }
 
         // Check declares
         for (const declare of ast.declares) {
             if (declare.name === word) {
                 locations.push(Location.create(uri, this.astRangeToLspRange(declare.range)));
+            }
+
+            // Check declare fields
+            for (const field of declare.fields) {
+                if (field.name === word) {
+                    locations.push(Location.create(uri, this.astRangeToLspRange(field.range)));
+                }
             }
         }
 
@@ -399,7 +449,7 @@ export class DroolsSymbolProvider {
     }
 
     /**
-     * Create rule symbol
+     * Create rule symbol with enhanced multi-line pattern support
      */
     private createRuleSymbol(rule: RuleNode): DocumentSymbol {
         const children: DocumentSymbol[] = [];
@@ -415,21 +465,10 @@ export class DroolsSymbolProvider {
             });
         }
 
-        // Add when clause
+        // Add when clause with enhanced multi-line pattern support
         if (rule.when) {
-            children.push({
-                name: `when (${rule.when.conditions.length} conditions)`,
-                kind: SymbolKind.Object,
-                range: this.astRangeToLspRange(rule.when.range),
-                selectionRange: this.astRangeToLspRange(rule.when.range),
-                children: rule.when.conditions.map(condition => ({
-                    name: condition.content.substring(0, 50) + (condition.content.length > 50 ? '...' : ''),
-                    kind: SymbolKind.Field,
-                    range: this.astRangeToLspRange(condition.range),
-                    selectionRange: this.astRangeToLspRange(condition.range),
-                    children: []
-                }))
-            });
+            const whenSymbol = this.createWhenClauseSymbol(rule.when);
+            children.push(whenSymbol);
         }
 
         // Add then clause
@@ -497,6 +536,453 @@ export class DroolsSymbolProvider {
             selectionRange: this.astRangeToLspRange(declare.range),
             children
         };
+    }
+
+    /**
+     * Create when clause symbol with multi-line pattern support
+     */
+    private createWhenClauseSymbol(whenNode: WhenNode): DocumentSymbol {
+        const children: DocumentSymbol[] = [];
+        
+        // Group conditions by multi-line patterns and regular conditions
+        const multiLinePatterns: ConditionNode[] = [];
+        const regularConditions: ConditionNode[] = [];
+        
+        for (const condition of whenNode.conditions) {
+            if (condition.isMultiLine && condition.multiLinePattern) {
+                multiLinePatterns.push(condition);
+            } else {
+                regularConditions.push(condition);
+            }
+        }
+        
+        // Add multi-line patterns as structured symbols
+        for (const condition of multiLinePatterns) {
+            const patternSymbol = this.createMultiLinePatternSymbol(condition);
+            children.push(patternSymbol);
+        }
+        
+        // Add regular conditions
+        for (const condition of regularConditions) {
+            const conditionSymbol = this.createConditionSymbol(condition);
+            children.push(conditionSymbol);
+        }
+        
+        const totalConditions = whenNode.conditions.length;
+        const multiLineCount = multiLinePatterns.length;
+        const regularCount = regularConditions.length;
+        
+        let whenName = `when (${totalConditions} conditions)`;
+        if (multiLineCount > 0) {
+            whenName = `when (${multiLineCount} multi-line, ${regularCount} regular)`;
+        }
+        
+        return {
+            name: whenName,
+            kind: SymbolKind.Object,
+            range: this.astRangeToLspRange(whenNode.range),
+            selectionRange: this.astRangeToLspRange(whenNode.range),
+            children
+        };
+    }
+
+    /**
+     * Create multi-line pattern symbol showing structure
+     */
+    private createMultiLinePatternSymbol(condition: ConditionNode): DocumentSymbol {
+        if (!condition.multiLinePattern) {
+            return this.createConditionSymbol(condition);
+        }
+        
+        const pattern = condition.multiLinePattern;
+        const children: DocumentSymbol[] = [];
+        
+        // Add nested patterns as children
+        for (const nestedPattern of pattern.nestedPatterns) {
+            const nestedSymbol = this.createNestedPatternSymbol(nestedPattern);
+            children.push(nestedSymbol);
+        }
+        
+        // Add inner conditions as children
+        for (const innerCondition of pattern.innerConditions) {
+            const innerSymbol = this.createConditionSymbol(innerCondition);
+            children.push(innerSymbol);
+        }
+        
+        // Create a descriptive name for the multi-line pattern
+        const patternName = this.createMultiLinePatternName(pattern);
+        
+        return {
+            name: patternName,
+            kind: SymbolKind.Constructor, // Use Constructor to distinguish multi-line patterns
+            range: this.astRangeToLspRange(pattern.range),
+            selectionRange: this.astRangeToLspRange(pattern.range),
+            children
+        };
+    }
+
+    /**
+     * Create nested pattern symbol
+     */
+    private createNestedPatternSymbol(nestedPattern: MultiLinePatternNode): DocumentSymbol {
+        const children: DocumentSymbol[] = [];
+        
+        // Add nested patterns recursively
+        for (const subPattern of nestedPattern.nestedPatterns) {
+            children.push(this.createNestedPatternSymbol(subPattern));
+        }
+        
+        // Add inner conditions
+        for (const innerCondition of nestedPattern.innerConditions) {
+            children.push(this.createConditionSymbol(innerCondition));
+        }
+        
+        const patternName = this.createMultiLinePatternName(nestedPattern);
+        
+        return {
+            name: patternName,
+            kind: SymbolKind.Constructor,
+            range: this.astRangeToLspRange(nestedPattern.range),
+            selectionRange: this.astRangeToLspRange(nestedPattern.range),
+            children
+        };
+    }
+
+    /**
+     * Create regular condition symbol
+     */
+    private createConditionSymbol(condition: ConditionNode): DocumentSymbol {
+        const conditionPreview = condition.content.substring(0, 50) + 
+            (condition.content.length > 50 ? '...' : '');
+        
+        const children: DocumentSymbol[] = [];
+        
+        // Add constraints as children if available
+        if (condition.constraints) {
+            for (const constraint of condition.constraints) {
+                children.push({
+                    name: `${constraint.field} ${constraint.operator} ${constraint.value}`,
+                    kind: SymbolKind.Property,
+                    range: this.astRangeToLspRange(constraint.range),
+                    selectionRange: this.astRangeToLspRange(constraint.range),
+                    children: []
+                });
+            }
+        }
+        
+        // Add nested conditions if available
+        if (condition.nestedConditions) {
+            for (const nestedCondition of condition.nestedConditions) {
+                children.push(this.createConditionSymbol(nestedCondition));
+            }
+        }
+        
+        return {
+            name: conditionPreview,
+            kind: SymbolKind.Field,
+            range: this.astRangeToLspRange(condition.range),
+            selectionRange: this.astRangeToLspRange(condition.range),
+            children
+        };
+    }
+
+    /**
+     * Create descriptive name for multi-line pattern
+     */
+    private createMultiLinePatternName(pattern: MultiLinePatternNode): string {
+        const keyword = pattern.keyword;
+        const depth = pattern.depth;
+        const nestedCount = pattern.nestedPatterns.length;
+        const conditionCount = pattern.innerConditions.length;
+        
+        let name = keyword;
+        
+        if (depth > 0) {
+            name = `${keyword} (depth ${depth})`;
+        }
+        
+        const parts: string[] = [];
+        if (nestedCount > 0) {
+            parts.push(`${nestedCount} nested`);
+        }
+        if (conditionCount > 0) {
+            parts.push(`${conditionCount} conditions`);
+        }
+        
+        if (parts.length > 0) {
+            name += ` (${parts.join(', ')})`;
+        }
+        
+        // Add line span information for multi-line patterns
+        if (pattern.range.start.line !== pattern.range.end.line) {
+            const lineSpan = pattern.range.end.line - pattern.range.start.line + 1;
+            name += ` [${lineSpan} lines]`;
+        }
+        
+        return name;
+    }
+
+    /**
+     * Search for multi-line patterns in conditions that match the query
+     */
+    private searchMultiLinePatterns(
+        conditions: ConditionNode[],
+        query: string,
+        uri: string,
+        containerName: string,
+        packageName?: string
+    ): WorkspaceSymbol[] {
+        const symbols: WorkspaceSymbol[] = [];
+
+        for (const condition of conditions) {
+            // Check if condition has multi-line pattern
+            if (condition.isMultiLine && condition.multiLinePattern) {
+                const pattern = condition.multiLinePattern;
+                
+                // Check if pattern keyword matches query
+                if (pattern.keyword.toLowerCase().includes(query)) {
+                    symbols.push({
+                        name: `${pattern.keyword} pattern`,
+                        kind: SymbolKind.Constructor,
+                        location: Location.create(uri, this.astRangeToLspRange(pattern.range)),
+                        containerName: `${containerName} > when`
+                    });
+                }
+
+                // Check pattern content for matches
+                if (pattern.content.toLowerCase().includes(query)) {
+                    const contentPreview = pattern.content.substring(0, 50) + 
+                        (pattern.content.length > 50 ? '...' : '');
+                    symbols.push({
+                        name: `${pattern.keyword}: ${contentPreview}`,
+                        kind: SymbolKind.Constructor,
+                        location: Location.create(uri, this.astRangeToLspRange(pattern.range)),
+                        containerName: `${containerName} > when`
+                    });
+                }
+
+                // Recursively search nested patterns
+                symbols.push(...this.searchNestedPatterns(
+                    pattern.nestedPatterns,
+                    query,
+                    uri,
+                    `${containerName} > ${pattern.keyword}`,
+                    packageName
+                ));
+
+                // Search inner conditions
+                symbols.push(...this.searchMultiLinePatterns(
+                    pattern.innerConditions,
+                    query,
+                    uri,
+                    `${containerName} > ${pattern.keyword}`,
+                    packageName
+                ));
+            } else {
+                // Check regular condition content
+                if (condition.content.toLowerCase().includes(query)) {
+                    const contentPreview = condition.content.substring(0, 50) + 
+                        (condition.content.length > 50 ? '...' : '');
+                    symbols.push({
+                        name: contentPreview,
+                        kind: SymbolKind.Field,
+                        location: Location.create(uri, this.astRangeToLspRange(condition.range)),
+                        containerName: `${containerName} > when`
+                    });
+                }
+
+                // Check variable name if available
+                if (condition.variable && condition.variable.toLowerCase().includes(query)) {
+                    symbols.push({
+                        name: `$${condition.variable}`,
+                        kind: SymbolKind.Variable,
+                        location: Location.create(uri, this.astRangeToLspRange(condition.range)),
+                        containerName: `${containerName} > when`
+                    });
+                }
+
+                // Check fact type if available
+                if (condition.factType && condition.factType.toLowerCase().includes(query)) {
+                    symbols.push({
+                        name: condition.factType,
+                        kind: SymbolKind.Class,
+                        location: Location.create(uri, this.astRangeToLspRange(condition.range)),
+                        containerName: `${containerName} > when`
+                    });
+                }
+            }
+
+            // Search nested conditions
+            if (condition.nestedConditions) {
+                symbols.push(...this.searchMultiLinePatterns(
+                    condition.nestedConditions,
+                    query,
+                    uri,
+                    containerName,
+                    packageName
+                ));
+            }
+        }
+
+        return symbols;
+    }
+
+    /**
+     * Search nested patterns recursively
+     */
+    private searchNestedPatterns(
+        nestedPatterns: MultiLinePatternNode[],
+        query: string,
+        uri: string,
+        containerName: string,
+        packageName?: string
+    ): WorkspaceSymbol[] {
+        const symbols: WorkspaceSymbol[] = [];
+
+        for (const pattern of nestedPatterns) {
+            // Check pattern keyword
+            if (pattern.keyword.toLowerCase().includes(query)) {
+                symbols.push({
+                    name: `${pattern.keyword} (nested)`,
+                    kind: SymbolKind.Constructor,
+                    location: Location.create(uri, this.astRangeToLspRange(pattern.range)),
+                    containerName
+                });
+            }
+
+            // Check pattern content
+            if (pattern.content.toLowerCase().includes(query)) {
+                const contentPreview = pattern.content.substring(0, 50) + 
+                    (pattern.content.length > 50 ? '...' : '');
+                symbols.push({
+                    name: `${pattern.keyword}: ${contentPreview}`,
+                    kind: SymbolKind.Constructor,
+                    location: Location.create(uri, this.astRangeToLspRange(pattern.range)),
+                    containerName
+                });
+            }
+
+            // Recursively search deeper nested patterns
+            symbols.push(...this.searchNestedPatterns(
+                pattern.nestedPatterns,
+                query,
+                uri,
+                `${containerName} > ${pattern.keyword}`,
+                packageName
+            ));
+
+            // Search inner conditions
+            symbols.push(...this.searchMultiLinePatterns(
+                pattern.innerConditions,
+                query,
+                uri,
+                `${containerName} > ${pattern.keyword}`,
+                packageName
+            ));
+        }
+
+        return symbols;
+    }
+
+    /**
+     * Find definitions within conditions (for go-to-definition across multi-line patterns)
+     */
+    private findDefinitionInConditions(
+        conditions: ConditionNode[],
+        word: string,
+        uri: string
+    ): Location[] {
+        const locations: Location[] = [];
+
+        for (const condition of conditions) {
+            // Check if the word matches a variable name
+            if (condition.variable === word) {
+                locations.push(Location.create(uri, this.astRangeToLspRange(condition.range)));
+            }
+
+            // Check if the word matches a fact type
+            if (condition.factType === word) {
+                locations.push(Location.create(uri, this.astRangeToLspRange(condition.range)));
+            }
+
+            // Check constraints for field names and values
+            if (condition.constraints) {
+                for (const constraint of condition.constraints) {
+                    if (constraint.field === word || constraint.value === word) {
+                        locations.push(Location.create(uri, this.astRangeToLspRange(constraint.range)));
+                    }
+                }
+            }
+
+            // Search within multi-line patterns
+            if (condition.isMultiLine && condition.multiLinePattern) {
+                const pattern = condition.multiLinePattern;
+                
+                // Check if word appears in pattern content
+                if (pattern.content.includes(word)) {
+                    locations.push(Location.create(uri, this.astRangeToLspRange(pattern.range)));
+                }
+
+                // Recursively search nested patterns
+                locations.push(...this.findDefinitionInNestedPatterns(
+                    pattern.nestedPatterns,
+                    word,
+                    uri
+                ));
+
+                // Search inner conditions
+                locations.push(...this.findDefinitionInConditions(
+                    pattern.innerConditions,
+                    word,
+                    uri
+                ));
+            }
+
+            // Search nested conditions
+            if (condition.nestedConditions) {
+                locations.push(...this.findDefinitionInConditions(
+                    condition.nestedConditions,
+                    word,
+                    uri
+                ));
+            }
+        }
+
+        return locations;
+    }
+
+    /**
+     * Find definitions within nested patterns
+     */
+    private findDefinitionInNestedPatterns(
+        nestedPatterns: MultiLinePatternNode[],
+        word: string,
+        uri: string
+    ): Location[] {
+        const locations: Location[] = [];
+
+        for (const pattern of nestedPatterns) {
+            // Check if word appears in pattern content
+            if (pattern.content.includes(word)) {
+                locations.push(Location.create(uri, this.astRangeToLspRange(pattern.range)));
+            }
+
+            // Recursively search deeper nested patterns
+            locations.push(...this.findDefinitionInNestedPatterns(
+                pattern.nestedPatterns,
+                word,
+                uri
+            ));
+
+            // Search inner conditions
+            locations.push(...this.findDefinitionInConditions(
+                pattern.innerConditions,
+                word,
+                uri
+            ));
+        }
+
+        return locations;
     }
 
     /**

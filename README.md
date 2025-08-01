@@ -14,7 +14,7 @@ Transform your Drools development experience with comprehensive language support
 
 ### 🎨 Rich Syntax Highlighting
 
-Experience beautiful, semantic syntax highlighting that makes your Drools code easy to read and understand.
+Experience beautiful, semantic syntax highlighting that makes your Drools code easy to read and understand, including full support for multi-line patterns.
 
 ![Syntax Highlighting Demo](images/screenshots/syntax-highlighting.gif)
 *Rich syntax highlighting with distinct colors for keywords, strings, comments, and operators*
@@ -23,6 +23,7 @@ Experience beautiful, semantic syntax highlighting that makes your Drools code e
 - **Keywords**: `rule`, `when`, `then`, `end`, `function`, `import`, `package`
 - **Operators**: `==`, `!=`, `&&`, `||`, `matches`, `contains`, `memberOf`
 - **Fact Patterns**: Variable bindings, constraints, and field access
+- **Multi-line Patterns**: `exists()`, `not()`, `eval()`, `forall()`, `collect()`, `accumulate()`
 - **Comments**: Single-line (`//`) and multi-line (`/* */`) comments
 - **Strings & Numbers**: Proper highlighting for literals and expressions
 
@@ -133,6 +134,227 @@ Customize the extension to match your development preferences and team standards
 
 ![Settings Panel](images/screenshots/settings-panel.png)
 *Extension settings panel with all configuration options*
+
+## 🔄 Multi-line Pattern Support
+
+The extension provides comprehensive support for multi-line condition patterns, allowing you to write complex Drools rules with proper syntax highlighting, validation, and formatting across multiple lines.
+
+### Supported Multi-line Patterns
+
+The extension fully supports all Drools multi-line pattern constructs:
+
+- **`exists()`** - Existential quantification patterns
+- **`not()`** - Negation patterns  
+- **`eval()`** - Evaluation patterns
+- **`forall()`** - Universal quantification patterns
+- **`collect()`** - Collection patterns
+- **`accumulate()`** - Accumulation patterns
+
+### Multi-line Pattern Examples
+
+#### Basic Multi-line Exists Pattern
+
+```drools
+rule "Multi-line Exists Example"
+when
+    exists(
+        Person(
+            age > 18,
+            name != null,
+            address.city == "New York"
+        )
+    )
+then
+    // Rule action
+end
+```
+
+#### Nested Multi-line Patterns
+
+```drools
+rule "Complex Nested Pattern"
+when
+    $customer : Customer(status == "PREMIUM")
+    exists(
+        Order(
+            customer == $customer,
+            total > 1000
+        ) and
+        not(
+            Refund(
+                order.customer == $customer,
+                amount > 100
+            )
+        )
+    )
+then
+    // Apply premium customer benefits
+end
+```
+
+#### Multi-line Accumulate Pattern
+
+```drools
+rule "Calculate Total Spending"
+when
+    $customer : Customer()
+    $total : Number() from accumulate(
+        Order(
+            customer == $customer,
+            status == "COMPLETED"
+        ),
+        sum(total)
+    )
+    eval($total.doubleValue() > 5000)
+then
+    $customer.setVipStatus(true);
+    update($customer);
+end
+```
+
+#### Multi-line Collect Pattern
+
+```drools
+rule "Process Multiple Orders"
+when
+    $customer : Customer()
+    $orders : List() from collect(
+        Order(
+            customer == $customer,
+            status == "PENDING",
+            priority == "HIGH"
+        )
+    )
+    eval($orders.size() > 3)
+then
+    // Process bulk high-priority orders
+    for (Object order : $orders) {
+        ((Order) order).setStatus("PROCESSING");
+        update(order);
+    }
+end
+```
+
+#### Multi-line Forall Pattern
+
+```drools
+rule "All Orders Must Be Validated"
+when
+    $customer : Customer()
+    forall(
+        Order(
+            customer == $customer,
+            status == "SUBMITTED"
+        )
+        Order(
+            customer == $customer,
+            status == "SUBMITTED",
+            validated == true
+        )
+    )
+then
+    $customer.setReadyForProcessing(true);
+    update($customer);
+end
+```
+
+### Multi-line Pattern Features
+
+#### ✅ Syntax Highlighting
+- Complete syntax highlighting across line boundaries
+- Proper keyword highlighting for pattern types
+- Bracket matching and nesting visualization
+- Consistent coloring for nested patterns
+
+#### ✅ Intelligent Formatting
+- Automatic indentation for nested levels
+- Proper alignment of closing parentheses
+- Consistent spacing within multi-line patterns
+- Format-on-save support for multi-line constructs
+
+#### ✅ Error Detection
+- Unmatched parentheses detection across lines
+- Context-aware error messages
+- Validation of nested pattern syntax
+- Real-time error highlighting
+
+#### ✅ Code Completion
+- Context-aware keyword completion within patterns
+- Fact type suggestions in nested conditions
+- Operator completions that understand pattern context
+- Variable completion across pattern boundaries
+
+#### ✅ Code Navigation
+- Bracket matching across multiple lines
+- Code folding for multi-line patterns
+- Document outline showing pattern structure
+- Go-to-definition within nested patterns
+
+### Best Practices for Multi-line Patterns
+
+#### Indentation Style
+```drools
+// Recommended: Consistent indentation
+rule "Well Formatted Pattern"
+when
+    exists(
+        Person(
+            age > 21,
+            status == "ACTIVE"
+        ) and
+        Account(
+            owner == person,
+            balance > 0
+        )
+    )
+then
+    // Action
+end
+```
+
+#### Logical Grouping
+```drools
+// Group related conditions together
+rule "Logical Grouping Example"
+when
+    $customer : Customer()
+    exists(
+        // Group 1: Order conditions
+        Order(
+            customer == $customer,
+            status == "ACTIVE",
+            total > 100
+        ) and
+        // Group 2: Payment conditions  
+        Payment(
+            order.customer == $customer,
+            status == "CONFIRMED",
+            amount >= order.total
+        )
+    )
+then
+    // Process confirmed order
+end
+```
+
+#### Avoid Deep Nesting
+```drools
+// Avoid: Too deeply nested
+exists(
+    Person() and
+    not(
+        Order() and
+        not(
+            Payment() and
+            exists(Refund())
+        )
+    )
+)
+
+// Better: Break into multiple rules or simplify logic
+exists(Person() and Order())
+not(exists(Payment() and Refund()))
+```
 
 ## Installation
 
@@ -329,11 +551,19 @@ Initial release with comprehensive Drools language support:
 - 🔄 Rule testing framework integration
 - 🔄 Advanced code completion with fact model awareness
 
+## Multi-line Pattern Resources
+
+- 📖 **[Complete Multi-line Patterns Guide](MULTILINE_PATTERNS_GUIDE.md)** - Comprehensive documentation for all multi-line pattern features
+- 📋 **[Complete Examples](examples/multiline-patterns-examples.drl)** - Comprehensive examples of all multi-line pattern types
+- 🔧 **[Troubleshooting Guide](MULTILINE_PATTERNS_TROUBLESHOOTING.md)** - Solutions for common multi-line pattern issues
+- 📖 **[Pattern Best Practices](#best-practices-for-multi-line-patterns)** - Recommended coding styles and patterns
+
 ## Support
 
 - 📖 [Documentation](https://github.com/drools-community/drools-vscode-extension/wiki)
 - 🐛 [Report Issues](https://github.com/drools-community/drools-vscode-extension/issues)
 - 💬 [Discussions](https://github.com/drools-community/drools-vscode-extension/discussions)
+- 🔧 [Multi-line Pattern Troubleshooting](MULTILINE_PATTERNS_TROUBLESHOOTING.md)
 
 ## License
 
