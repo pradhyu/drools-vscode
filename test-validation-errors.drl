@@ -111,3 +111,28 @@ rule "Eval Error Rule"
     then
         System.out.println("Eval error");
 end
+// Error 15:  rule not ule
+ule "Eval Error Rule"
+    when
+        $person : Person()
+        eval(
+            $person.getAge() > 18 &&
+            $person.getName() != null
+            // Missing closing parenthesis for eval
+    then
+        System.out.println("Eval error");
+end
+
+// Error 15:  no-loop twice error
+rule "Eval Error Rule"
+no-loop 
+no-loop
+    when
+        $person : Person()
+        eval(
+            $person.getAge() > 18 &&
+            $person.getName() != null
+            // Missing closing parenthesis for eval
+    then
+        System.out.println("Eval error");
+end

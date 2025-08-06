@@ -512,7 +512,7 @@ export class DroolsParser {
             ...this.parenthesesTracker.openPositions.map(pos => ({ ...pos, type: 'open' as const })),
             ...this.parenthesesTracker.closePositions.map(pos => ({ ...pos, type: 'close' as const }))
         ].sort((a, b) => {
-            if (a.line !== b.line) return a.line - b.line;
+            if (a.line !== b.line) {return a.line - b.line;}
             return a.character - b.character;
         });
         
@@ -588,12 +588,17 @@ export class DroolsParser {
                 ast.imports.push(this.parseImport());
             } else if (line.startsWith('global ')) {
                 ast.globals.push(this.parseGlobal());
+            } else if (line.startsWith('function ')) {
+                ast.functions.push(this.parseFunction());
             } else if (line.startsWith('rule ')) {
                 ast.rules.push(this.parseRule());
             } else if (line.startsWith('query ')) {
                 ast.queries.push(this.parseQuery());
             } else if (line.startsWith('declare ')) {
                 ast.declares.push(this.parseDeclare());
+            } else if (line.trim() !== '') {
+                // Skip empty lines and comments
+                this.currentLine++;
             } else {
                 this.currentLine++;
             }
@@ -716,6 +721,82 @@ export class DroolsParser {
     }
 
     /**
+     * Parse function declaration
+     */
+    private parseFunction(): FunctionNode {
+        const startLine = this.currentLine;
+        const line = this.lines[this.currentLine];
+        
+        // Parse function signature: function ReturnType functionName(param1Type param1Name, ...)
+        const match = line.match(/function\s+(\S+)\s+(\w+)\s*\(([^)]*)\)/);
+        const returnType = match ? match[1] : '';
+        const name = match ? match[2] : '';
+        const paramString = match ? match[3] : '';
+        
+        // Parse parameters
+        const parameters: ParameterNode[] = [];
+        if (paramString.trim()) {
+            const paramPairs = paramString.split(',');
+            for (const pair of paramPairs) {
+                const paramMatch = pair.trim().match(/(\S+)\s+(\w+)/);
+                if (paramMatch) {
+                    parameters.push({
+                        type: 'Parameter',
+                        dataType: paramMatch[1],
+                        name: paramMatch[2],
+                        range: {
+                            start: { line: startLine, character: 0 },
+                            end: { line: startLine, character: line.length }
+                        }
+                    });
+                }
+            }
+        }
+        
+        // Skip function body until closing brace
+        let braceCount = 0;
+        let foundOpenBrace = false;
+        
+        // Check if opening brace is on the same line as function declaration
+        for (const char of line) {
+            if (char === '{') {
+                braceCount++;
+                foundOpenBrace = true;
+            }
+        }
+        
+        this.currentLine++;
+        
+        while (this.currentLine < this.lines.length) {
+            const bodyLine = this.lines[this.currentLine];
+            for (const char of bodyLine) {
+                if (char === '{') {
+                    braceCount++;
+                    foundOpenBrace = true;
+                } else if (char === '}') {
+                    braceCount--;
+                }
+            }
+            this.currentLine++;
+            if (foundOpenBrace && braceCount === 0) {
+                break;
+            }
+        }
+        
+        return {
+            type: 'Function',
+            name,
+            returnType,
+            parameters,
+            body: '', // We don't parse function body content for now
+            range: {
+                start: { line: startLine, character: 0 },
+                end: { line: this.currentLine - 1, character: this.lines[this.currentLine - 1]?.length || 0 }
+            }
+        };
+    }
+
+    /**
      * Parse rule declaration
      */
     private parseRule(): RuleNode {
@@ -730,7 +811,7 @@ export class DroolsParser {
         const attributes: RuleAttributeNode[] = [];
         while (this.currentLine < this.lines.length) {
             const attrLine = this.lines[this.currentLine].trim();
-            if (attrLine === 'when') break;
+            if (attrLine === 'when') {break;}
             if (attrLine && !attrLine.startsWith('//')) {
                 // Simple attribute parsing
                 const attrMatch = attrLine.match(/(\w+)\s*(.*)$/);
@@ -790,20 +871,21 @@ export class DroolsParser {
         this.currentLine++; // Skip 'when'
         
         const conditions: ConditionNode[] = [];
-        let conditionContent = '';
+        let allContent = '';
         
+        // Collect all content between 'when' and 'then'
         while (this.currentLine < this.lines.length) {
             const line = this.lines[this.currentLine].trim();
-            if (line === 'then') break;
+            if (line === 'then') {break;}
             
-            conditionContent += line + '\n';
+            allContent += this.lines[this.currentLine] + '\n';
             this.currentLine++;
         }
         
-        // Parse conditions from content
-        if (conditionContent.trim()) {
-            const condition = this.parseConditionFromContent(conditionContent.trim(), startLine + 1);
-            conditions.push(condition);
+        // Parse multiple conditions from content
+        if (allContent.trim()) {
+            const parsedConditions = this.parseMultipleConditions(allContent.trim(), startLine + 1);
+            conditions.push(...parsedConditions);
         }
         
         return {
@@ -817,6 +899,89 @@ export class DroolsParser {
     }
 
     /**
+     * Parse multiple conditions from content string
+     * This method attempts to split conditions based on common patterns
+     */
+    private parseMultipleConditions(content: string, startLine: number): ConditionNode[] {
+        const conditions: ConditionNode[] = [];
+        const lines = content.split('\n');
+        
+        // Simple heuristic: split on lines that start with variable patterns like $var : Type
+        // or keywords like 'exists', 'not', 'eval', etc.
+        let currentCondition = '';
+        let currentStartLine = startLine;
+        
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            
+            // Check if this line starts a new condition
+            const isNewCondition = this.isStartOfNewCondition(line, currentCondition);
+            
+            if (isNewCondition && currentCondition.trim()) {
+                // Parse the accumulated condition
+                const condition = this.parseConditionFromContent(currentCondition.trim(), currentStartLine);
+                conditions.push(condition);
+                
+                // Start new condition
+                currentCondition = line;
+                currentStartLine = startLine + i;
+            } else {
+                // Add to current condition
+                if (currentCondition) {
+                    currentCondition += '\n' + line;
+                } else {
+                    currentCondition = line;
+                    currentStartLine = startLine + i;
+                }
+            }
+        }
+        
+        // Don't forget the last condition
+        if (currentCondition.trim()) {
+            const condition = this.parseConditionFromContent(currentCondition.trim(), currentStartLine);
+            conditions.push(condition);
+        }
+        
+        // If no conditions were split, treat the entire content as one condition
+        if (conditions.length === 0) {
+            const condition = this.parseConditionFromContent(content, startLine);
+            conditions.push(condition);
+        }
+        
+        return conditions;
+    }
+
+    /**
+     * Check if a line starts a new condition
+     */
+    private isStartOfNewCondition(line: string, currentCondition: string): boolean {
+        if (!line || !currentCondition) {
+            return false;
+        }
+        
+        // Only split on clear variable patterns at the start of a line: $var : Type
+        // But not if we're inside an unbalanced multi-line pattern
+        if (line.match(/^\$\w+\s*:\s*\w+/)) {
+            // Check if current condition has balanced parentheses
+            const openParens = (currentCondition.match(/\(/g) || []).length;
+            const closeParens = (currentCondition.match(/\)/g) || []).length;
+            
+            // Only split if parentheses are balanced (current condition is complete)
+            return openParens === closeParens;
+        }
+        
+        // Check for multi-line pattern keywords at start of line, but only if current condition is complete
+        if (line.match(/^(exists|not|eval|forall|collect|accumulate)\s*\(/)) {
+            const openParens = (currentCondition.match(/\(/g) || []).length;
+            const closeParens = (currentCondition.match(/\)/g) || []).length;
+            
+            return openParens === closeParens;
+        }
+        
+        return false;
+    }
+
+    /**
      * Parse then clause
      */
     private parseThenClause(): ThenNode {
@@ -826,7 +991,7 @@ export class DroolsParser {
         let content = '';
         while (this.currentLine < this.lines.length) {
             const line = this.lines[this.currentLine].trim();
-            if (line === 'end') break;
+            if (line === 'end') {break;}
             
             content += this.lines[this.currentLine] + '\n';
             this.currentLine++;
@@ -1195,10 +1360,28 @@ export class DroolsParser {
         const startPos: Position = { line: metadata.startLine, character: metadata.startColumn };
         const endPos: Position = { line: metadata.endLine, character: metadata.endColumn };
         
-        // Parse inner conditions within the multi-line pattern
-        const innerConditions = this.parseInnerConditions(metadata.content, metadata);
+        // Prevent infinite recursion with depth limit
+        const maxDepth = 10;
+        if (depth > maxDepth) {
+            // Return a simplified node without further nesting
+            return {
+                type: 'MultiLinePattern',
+                patternType: metadata.type,
+                keyword: metadata.keyword,
+                content: metadata.content,
+                range: { start: startPos, end: endPos },
+                nestedPatterns: [],
+                parenthesesRanges: metadata.parenthesesRanges,
+                isComplete: metadata.isComplete,
+                depth,
+                innerConditions: []
+            };
+        }
         
-        // Create nested pattern nodes
+        // Parse inner conditions within the multi-line pattern
+        const innerConditions = this.parseInnerConditions(metadata.content, metadata, depth);
+        
+        // Create nested pattern nodes with depth limit
         const nestedPatterns = metadata.nestedPatterns.map(nested => 
             this.createMultiLinePatternNode(nested, depth + 1)
         );
@@ -1231,8 +1414,14 @@ export class DroolsParser {
      * - relationalExpression: comparison operators and fact patterns
      * - primary: parenthesized expressions and literals
      */
-    private parseInnerConditions(content: string, parentMetadata: MultiLinePatternMetadata): ConditionNode[] {
+    private parseInnerConditions(content: string, parentMetadata: MultiLinePatternMetadata, depth: number = 0): ConditionNode[] {
         const conditions: ConditionNode[] = [];
+        
+        // Prevent infinite recursion with depth limit
+        const maxDepth = 5;
+        if (depth > maxDepth) {
+            return conditions;
+        }
         
         // Remove the outer pattern keyword and parentheses to get inner content
         const keywordPattern = new RegExp(`^\\s*${parentMetadata.keyword}\\s*\\(`);
@@ -1249,7 +1438,7 @@ export class DroolsParser {
         for (let i = 0; i < conditionParts.length; i++) {
             const part = conditionParts[i].trim();
             if (part) {
-                const condition = this.createConditionFromContent(part, parentMetadata, i);
+                const condition = this.createConditionFromContent(part, parentMetadata, i, depth);
                 conditions.push(condition);
             }
         }
@@ -1337,7 +1526,7 @@ export class DroolsParser {
     /**
      * Create a ConditionNode from content string
      */
-    private createConditionFromContent(content: string, parentMetadata: MultiLinePatternMetadata, index: number): ConditionNode {
+    private createConditionFromContent(content: string, parentMetadata: MultiLinePatternMetadata, index: number, depth: number = 0): ConditionNode {
         const startPos: Position = { 
             line: parentMetadata.startLine, 
             character: parentMetadata.startColumn + index * 10 // Approximate positioning
@@ -1352,11 +1541,12 @@ export class DroolsParser {
         const { variable, factType, constraints } = this.parseConditionComponents(content);
         
         // Check if this condition itself contains nested multi-line patterns
-        const nestedPattern = this.detectMultiLinePattern(content, startPos);
+        // Only if we haven't exceeded depth limit
+        const nestedPattern = depth < 5 ? this.detectMultiLinePattern(content, startPos) : null;
         let multiLinePattern: MultiLinePatternNode | undefined;
         
         if (nestedPattern) {
-            multiLinePattern = this.createMultiLinePatternNode(nestedPattern);
+            multiLinePattern = this.createMultiLinePatternNode(nestedPattern, depth + 1);
         }
         
         return {
@@ -1381,22 +1571,22 @@ export class DroolsParser {
     private detectConditionType(content: string): ConditionNode['conditionType'] {
         const trimmed = content.trim();
         
-        if (trimmed.startsWith('exists(')) {
+        if (trimmed.startsWith('exists(') || trimmed.includes(': exists(') || trimmed.includes(' exists(')) {
             return 'exists';
         }
-        if (trimmed.startsWith('not(')) {
+        if (trimmed.startsWith('not(') || trimmed.includes(': not(') || trimmed.includes(' not(')) {
             return 'not';
         }
-        if (trimmed.startsWith('eval(')) {
+        if (trimmed.startsWith('eval(') || trimmed.includes(': eval(') || trimmed.includes(' eval(')) {
             return 'eval';
         }
-        if (trimmed.startsWith('forall(')) {
+        if (trimmed.startsWith('forall(') || trimmed.includes(': forall(') || trimmed.includes(' forall(')) {
             return 'forall';
         }
-        if (trimmed.startsWith('collect(')) {
+        if (trimmed.startsWith('collect(') || trimmed.includes(': collect(') || trimmed.includes(' collect(')) {
             return 'collect';
         }
-        if (trimmed.startsWith('accumulate(')) {
+        if (trimmed.startsWith('accumulate(') || trimmed.includes(': accumulate(') || trimmed.includes(' accumulate(')) {
             return 'accumulate';
         }
         if (trimmed.includes(' and ')) {

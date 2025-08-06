@@ -82,21 +82,8 @@ export class DroolsFormattingProvider implements MultiLineFormatting {
         range: Range,
         parseResult: ParseResult
     ): TextEdit[] {
-        const edits: TextEdit[] = [];
-        
-        // First, handle multi-line patterns specifically
-        const multiLinePatterns = this.findMultiLinePatternsInRange(parseResult.ast, range);
-        for (const pattern of multiLinePatterns) {
-            const patternEdits = this.formatMultiLinePattern(pattern, document);
-            edits.push(...patternEdits);
-        }
-        
-        // If we have multi-line pattern edits, return them
-        if (edits.length > 0) {
-            return edits;
-        }
-        
-        // Otherwise, fall back to standard formatting
+        // For now, always use standard formatting to avoid overlapping edits
+        // Multi-line pattern specific formatting can be added later as a separate feature
         const text = document.getText(range);
         const lines = text.split('\n');
         
@@ -496,7 +483,7 @@ export class DroolsFormattingProvider implements MultiLineFormatting {
         
         // Process each parentheses pair
         for (let i = 0; i < pattern.parenthesesRanges.length; i += 2) {
-            if (i + 1 >= pattern.parenthesesRanges.length) break;
+            if (i + 1 >= pattern.parenthesesRanges.length) {break;}
             
             const openRange = pattern.parenthesesRanges[i];
             const closeRange = pattern.parenthesesRanges[i + 1];

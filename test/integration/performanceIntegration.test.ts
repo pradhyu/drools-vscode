@@ -21,7 +21,10 @@ describe('Performance Integration', () => {
             debounceDelay: 50,
             maxCacheSize: 1024 * 1024,
             maxFileSize: 512 * 1024,
-            gcInterval: 5000
+            gcInterval: 5000,
+            maxMultiLinePatternDepth: 10,
+            multiLinePatternCacheSize: 100,
+            enableParenthesesCaching: true
         };
         performanceManager = new PerformanceManager(performanceSettings);
 
@@ -174,7 +177,10 @@ end
             debounceDelay: 50,
             maxCacheSize: 1024, // Very small cache for testing
             maxFileSize: 512 * 1024,
-            gcInterval: 5000
+            gcInterval: 5000,
+            maxMultiLinePatternDepth: 10,
+            multiLinePatternCacheSize: 100,
+            enableParenthesesCaching: true
         };
         
         const smallCacheManager = new PerformanceManager(performanceSettings);

@@ -18,7 +18,10 @@ describe('PerformanceManager', () => {
             debounceDelay: 100,
             maxCacheSize: 1024 * 1024, // 1MB
             maxFileSize: 512 * 1024, // 512KB
-            gcInterval: 1000 // 1 second for testing
+            gcInterval: 1000, // 1 second for testing
+            maxMultiLinePatternDepth: 10,
+            multiLinePatternCacheSize: 100,
+            enableParenthesesCaching: true
         };
         performanceManager = new PerformanceManager(settings);
     });

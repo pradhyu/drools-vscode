@@ -386,9 +386,9 @@ export class DroolsBracketMatchingProvider {
     }
 
     private getBracketType(bracket: string): 'parentheses' | 'braces' | 'brackets' {
-        if (['(', ')'].includes(bracket)) return 'parentheses';
-        if (['{', '}'].includes(bracket)) return 'braces';
-        if (['[', ']'].includes(bracket)) return 'brackets';
+        if (['(', ')'].includes(bracket)) {return 'parentheses';}
+        if (['{', '}'].includes(bracket)) {return 'braces';}
+        if (['[', ']'].includes(bracket)) {return 'brackets';}
         return 'parentheses';
     }
 

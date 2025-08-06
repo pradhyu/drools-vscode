@@ -22,7 +22,10 @@ export interface CompletionSettings {
     enableFactTypeCompletion: boolean;
     enableFunctionCompletion: boolean;
     enableVariableCompletion: boolean;
+    enableGlobalCompletion?: boolean;
     maxCompletionItems: number;
+    enableSnippets?: boolean;
+    enableSignatureHelp?: boolean;
 }
 
 export interface CompletionContext {
@@ -952,6 +955,23 @@ export class DroolsCompletionProvider {
     }
 
     /**
+     * Extract fact type from condition content
+     */
+    private extractFactTypeFromCondition(condition: ConditionNode): string | null {
+        if (!condition.content) {
+            return null;
+        }
+
+        // Pattern: $var : FactType(...) or FactType(...)
+        const factTypeMatch = condition.content.match(/(?:\$\w+\s*:\s*)?(\w+)\s*\(/);
+        if (factTypeMatch) {
+            return factTypeMatch[1];
+        }
+
+        return null;
+    }
+
+    /**
      * Enhanced fact type completions for multi-line patterns
      */
     private getEnhancedFactTypeCompletions(context: CompletionContext): CompletionItem[] {
@@ -968,6 +988,26 @@ export class DroolsCompletionProvider {
         // Add context-specific fact types based on multi-line pattern
         if (context.multiLinePattern) {
             factTypes.push(...this.getContextSpecificFactTypes(context.multiLinePattern));
+        }
+
+        // Add fact types from existing rules
+        for (const rule of this.ast.rules) {
+            if (rule.when) {
+                for (const condition of rule.when.conditions) {
+                    // Extract fact type from condition content
+                    const factType = this.extractFactTypeFromCondition(condition);
+                    if (factType) {
+                        factTypes.push(factType);
+                    }
+                }
+            }
+        }
+
+        // Add fact types from declare statements
+        for (const declare of this.ast.declares) {
+            if (declare.name) {
+                factTypes.push(declare.name);
+            }
         }
 
         // Add imported fact types

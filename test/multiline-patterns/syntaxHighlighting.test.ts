@@ -142,6 +142,51 @@ describe('Multi-line Pattern Syntax Highlighting', () => {
             expect(thenPatterns.length).toBeGreaterThan(0);
         });
     });
+    // Mock test for actual highlighting behavior (would require VS Code test environment)
+    describe('Multi-line Pattern Highlighting Integration', () => {
+        test('should highlight exists pattern correctly', () => {
+            const content = `rule "Test"
+when
+    exists(
+        Person(age > 18)
+    )
+then
+    System.out.println("test");
+end`;
+            
+            // In a real test environment, this would use VS Code's tokenization
+            // For now, we just verify the grammar has the necessary patterns
+            expect(grammar).toBeDefined();
+            expect(grammar.patterns).toBeDefined();
+            
+            // Verify that the grammar can potentially handle this content
+            const hasKeywordPattern = findPatternsByKeyword(grammar, 'exists').length > 0;
+            const hasBasicPatterns = grammar.patterns.length > 0;
+            
+            expect(hasKeywordPattern || hasBasicPatterns).toBe(true);
+        });
+
+        test('should highlight nested patterns correctly', () => {
+            const content = `rule "Nested Test"
+when
+    exists(
+        Person(age > 18) and
+        not(
+            Account(balance < 0)
+        )
+    )
+then
+    System.out.println("test");
+end`;
+            
+            // Verify grammar can handle nested structures
+            const hasNestedSupport = grammar.patterns.some((p: any) => 
+                p.patterns && Array.isArray(p.patterns)
+            ) || grammar.patterns.length > 0;
+            
+            expect(hasNestedSupport).toBe(true);
+        });
+    });
 });
 
 // Helper functions for testing grammar patterns
@@ -202,48 +247,3 @@ function getAllPatterns(grammar: any): any[] {
     return patterns;
 }
 
-// Mock test for actual highlighting behavior (would require VS Code test environment)
-describe('Multi-line Pattern Highlighting Integration', () => {
-    test('should highlight exists pattern correctly', () => {
-        const content = `rule "Test"
-when
-    exists(
-        Person(age > 18)
-    )
-then
-    System.out.println("test");
-end`;
-        
-        // In a real test environment, this would use VS Code's tokenization
-        // For now, we just verify the grammar has the necessary patterns
-        expect(grammar).toBeDefined();
-        expect(grammar.patterns).toBeDefined();
-        
-        // Verify that the grammar can potentially handle this content
-        const hasKeywordPattern = findPatternsByKeyword(grammar, 'exists').length > 0;
-        const hasBasicPatterns = grammar.patterns.length > 0;
-        
-        expect(hasKeywordPattern || hasBasicPatterns).toBe(true);
-    });
-
-    test('should highlight nested patterns correctly', () => {
-        const content = `rule "Nested Test"
-when
-    exists(
-        Person(age > 18) and
-        not(
-            Account(balance < 0)
-        )
-    )
-then
-    System.out.println("test");
-end`;
-        
-        // Verify grammar can handle nested structures
-        const hasNestedSupport = grammar.patterns.some((p: any) => 
-            p.patterns && Array.isArray(p.patterns)
-        ) || grammar.patterns.length > 0;
-        
-        expect(hasNestedSupport).toBe(true);
-    });
-});
