@@ -353,10 +353,15 @@ export class DroolsDiagnosticProvider {
         }
 
         // Look for potential attributes in the rule text
-        const attributePattern = /\b([a-zA-Z-]+)\s+(true|false|\d+|"[^"]*")/g;
+        // Pattern 1: Attributes with explicit values (salience 100, dialect "java")
+        const attributeWithValuePattern = /\b([a-zA-Z-]+)\s+(true|false|\d+|"[^"]*")/g;
+        // Pattern 2: Boolean attributes without explicit values (no-loop, lock-on-active)
+        const booleanAttributePattern = /\b(no-loop|lock-on-active|auto-focus|enabled)\b/g;
+        
         let match;
         
-        while ((match = attributePattern.exec(ruleText)) !== null) {
+        // Check attributes with explicit values
+        while ((match = attributeWithValuePattern.exec(ruleText)) !== null) {
             const attributeName = match[1];
             
             // Skip if it's a known keyword that's not an attribute
@@ -376,6 +381,15 @@ export class DroolsDiagnosticProvider {
                     source: 'drools-semantic'
                 });
             }
+        }
+        
+        // Check boolean attributes without explicit values (these are valid)
+        while ((match = booleanAttributePattern.exec(ruleText)) !== null) {
+            const attributeName = match[1];
+            
+            // These are valid boolean attributes that can appear without explicit values
+            // no-loop, lock-on-active, auto-focus, enabled are all valid
+            // No need to report errors for these
         }
     }
 
@@ -881,8 +895,7 @@ export class DroolsDiagnosticProvider {
             }
         }
 
-        // Validate rule attributes according to Drools specification
-        this.validateRuleAttributes(ast, diagnostics);
+        // Rule attributes are already validated in validateDroolsRuleAttributes() above
 
         // Check for potential performance issues
         this.validatePerformanceIssues(ast, diagnostics);
@@ -1487,42 +1500,7 @@ export class DroolsDiagnosticProvider {
         return diagnostics.slice(0, this.settings.maxNumberOfProblems);
     }
 
-    /**
-     * Validate rule attributes according to Drools specification
-     */
-    private validateRuleAttributes(ast: DroolsAST, diagnostics: Diagnostic[]): void {
-        for (const rule of ast.rules) {
-            for (const attribute of rule.attributes) {
-                this.validateSingleRuleAttribute(rule, attribute, diagnostics);
-            }
-        }
-    }
-
-    /**
-     * Validate a single rule attribute
-     */
-    private validateSingleRuleAttribute(rule: RuleNode, attribute: any, diagnostics: Diagnostic[]): void {
-        const validAttributes = [
-            'salience', 'no-loop', 'agenda-group', 'auto-focus', 'activation-group',
-            'ruleflow-group', 'lock-on-active', 'dialect', 'date-effective', 'date-expires',
-            'duration', 'timer', 'calendars', 'enabled'
-        ];
-
-        if (!validAttributes.includes(attribute.name)) {
-            diagnostics.push({
-                severity: DiagnosticSeverity.Warning,
-                range: {
-                    start: { line: attribute.range?.start.line || rule.range.start.line, character: attribute.range?.start.character || 0 },
-                    end: { line: attribute.range?.end.line || rule.range.start.line, character: attribute.range?.end.character || 100 }
-                },
-                message: `Unknown rule attribute: "${attribute.name}". Valid attributes are: ${validAttributes.join(', ')}`,
-                source: 'drools-semantic'
-            });
-        }
-
-        // Validate attribute values
-        this.validateAttributeValue(rule, attribute, diagnostics);
-    }
+    // Duplicate validation methods removed - rule attributes are validated in validateDroolsRuleAttributes()
 
     /**
      * Validate rule attribute values

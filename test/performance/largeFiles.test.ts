@@ -127,7 +127,7 @@ describe('Performance Tests for Large Files', () => {
 
             for (const position of positions) {
                 const startTime = performance.now();
-                const completions = await completionProvider.provideCompletions(document, position, parseResult);
+                const completions = await completionProvider.provideCompletions(document, position, parseResult.ast);
                 const endTime = performance.now();
                 
                 const completionTime = endTime - startTime;
@@ -147,7 +147,7 @@ describe('Performance Tests for Large Files', () => {
             const position = { line: 100, character: 0 };
             
             const startTime = performance.now();
-            const completions = await completionProvider.provideCompletions(document, position, parseResult);
+            const completions = await completionProvider.provideCompletions(document, position, parseResult.ast);
             const endTime = performance.now();
             
             const completionTime = endTime - startTime;
@@ -353,9 +353,9 @@ end`;
             
             // Run multiple operations concurrently
             const operations = await Promise.all([
-                completionProvider.provideCompletions(document, { line: 50, character: 4 }, parseResult),
-                completionProvider.provideCompletions(document, { line: 100, character: 8 }, parseResult),
-                completionProvider.provideCompletions(document, { line: 150, character: 12 }, parseResult),
+                completionProvider.provideCompletions(document, { line: 50, character: 4 }, parseResult.ast),
+                completionProvider.provideCompletions(document, { line: 100, character: 8 }, parseResult.ast),
+                completionProvider.provideCompletions(document, { line: 150, character: 12 }, parseResult.ast),
                 Promise.resolve(diagnosticProvider.provideDiagnostics(document, parseResult.ast, parseResult.errors)),
                 Promise.resolve(formattingProvider.formatDocument(document, { insertSpaces: true, tabSize: 4 }, parseResult))
             ]);

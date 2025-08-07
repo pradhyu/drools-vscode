@@ -8,7 +8,13 @@ import { DroolsParser } from '../../src/server/parser/droolsParser';
 import { PerformanceManager } from '../../src/server/performance/performanceManager';
 import { MultiLinePatternMetadata, ParenthesesTracker } from '../../src/server/parser/ast';
 
-describe('Multi-Line Pattern PerforceManager({
+describe('Multi-Line Pattern Performance', () => {
+    let performanceManager: PerformanceManager;
+    let parser: DroolsParser;
+    let mockDocument: TextDocument;
+
+    beforeEach(() => {
+        performanceManager = new PerformanceManager({
             enableIncrementalParsing: true,
             enableCaching: true,
             debounceDelay: 100,
@@ -19,6 +25,7 @@ describe('Multi-Line Pattern PerforceManager({
             multiLinePatternCacheSize: 5 * 1024 * 1024, // 5MB
             enableParenthesesCaching: true
         });
+        parser = new DroolsParser();
     });
 
     afterEach(() => {

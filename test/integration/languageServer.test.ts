@@ -556,7 +556,9 @@ end`
             let currentDocument = document;
 
             for (let i = 0; i < 10; i++) {
-                const newContent = currentDocument.getText().replace('18', `${18 + i}`);
+                // Replace the age value with 18 + i (so final iteration will be 18 + 9 = 27)
+                const newAge = 18 + i;
+                const newContent = currentDocument.getText().replace(/age > \d+/, `age > ${newAge}`);
                 currentDocument = TextDocument.update(
                     currentDocument,
                     [{ text: newContent }],

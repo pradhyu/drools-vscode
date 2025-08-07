@@ -38,7 +38,7 @@ describe('Enhanced Multi-line Pattern Edge Cases Integration', () => {
     });
 
     describe('Deeply Nested Multi-line Patterns', () => {
-        test('should handle exists within not within eval pattern', () => {
+        test('should handle exists within not within eval pattern', async () => {
             const deeplyNestedContent = `rule "Deeply Nested Pattern"
 when
     eval(
@@ -110,7 +110,7 @@ end`;
             expect(criticalErrors.length).toBeLessThan(3); // Allow some minor issues
         });
 
-        test('should handle forall within collect within accumulate pattern', () => {
+        test('should handle forall within collect within accumulate pattern', async () => {
             const complexNestedContent = `rule "Complex Accumulate Pattern"
 when
     $total : Number() from accumulate(
@@ -176,7 +176,7 @@ end`;
             expect(majorErrors.length).toBeLessThan(100); // Allow some parsing complexity issues
         });
 
-        test('should handle maximum nesting depth gracefully', () => {
+        test('should handle maximum nesting depth gracefully', async () => {
             // Create extremely nested pattern to test limits
             const maxNestedContent = `rule "Maximum Nesting"
 when
@@ -252,7 +252,7 @@ end`;
             expect(formatEdits).toBeDefined();
         });
 
-        test('should handle nested patterns with complex variable bindings', () => {
+        test('should handle nested patterns with complex variable bindings', async () => {
             const complexVariableContent = `rule "Complex Variable Nesting"
 when
     $person : Person($age : age > 18, $name : name) and
@@ -325,7 +325,7 @@ end`;
     });
 
     describe('Mixed Single-line and Multi-line Patterns', () => {
-        test('should handle mixed patterns in same rule', () => {
+        test('should handle mixed patterns in same rule', async () => {
             const mixedPatternContent = `rule "Mixed Patterns"
 when
     $person : Person(age > 18, name != null) and  // Single-line
@@ -390,24 +390,16 @@ end`;
             // Test completion at different positions
             // Position in single-line pattern
             const singleLinePosition: Position = { line: 2, character: 30 };
-            let singleLineCompletion: any;
-            expect(() => {
-                singleLineCompletion = completionProvider.provideCompletions(document, singleLinePosition, parseResult);
-            }).not.toThrow();
-            
+            const singleLineCompletion = await completionProvider.provideCompletions(document, singleLinePosition, parseResult.ast);
             expect(singleLineCompletion).toBeDefined();
 
             // Position in multi-line pattern
             const multiLinePosition: Position = { line: 5, character: 20 };
-            let multiLineCompletion: any;
-            expect(() => {
-                multiLineCompletion = completionProvider.provideCompletions(document, multiLinePosition, parseResult);
-            }).not.toThrow();
-            
+            const multiLineCompletion = await completionProvider.provideCompletions(document, multiLinePosition, parseResult.ast);
             expect(multiLineCompletion).toBeDefined();
         });
 
-        test('should handle transitions between pattern types', () => {
+        test('should handle transitions between pattern types', async () => {
             const transitionContent = `rule "Pattern Transitions"
 when
     Person(age > 18) and exists(Account()) and  // Single to multi to single
@@ -467,7 +459,7 @@ end`;
             }
         });
 
-        test('should handle complex mixed pattern with variables', () => {
+        test('should handle complex mixed pattern with variables', async () => {
             const complexMixedContent = `rule "Complex Mixed with Variables"
 when
     $p : Person(age > 18, $name : name) and
@@ -533,7 +525,7 @@ end`;
             expect(undefinedVariableErrors.length).toBeLessThan(2); // Allow some edge cases
         });
 
-        test('should handle alternating single and multi-line patterns', () => {
+        test('should handle alternating single and multi-line patterns', async () => {
             const alternatingContent = `rule "Alternating Patterns"
 when
     Person(age > 18) and  // Single
@@ -599,17 +591,15 @@ end`;
             ];
 
             for (const position of positions) {
-                let completion: any;
-                expect(() => {
-                    completion = completionProvider.provideCompletions(document, position, parseResult);
-                }).not.toThrow();
+                const completion = await completionProvider.provideCompletions(document, position, parseResult.ast);
+
                 expect(completion).toBeDefined();
             }
         });
     });
 
     describe('Formatting Behavior with Various Indentation Styles', () => {
-        test('should handle tab-based indentation', () => {
+        test('should handle tab-based indentation', async () => {
             const tabIndentedContent = `rule "Tab Indented"
 when
 \texists(
@@ -659,7 +649,7 @@ end`;
             }
         });
 
-        test('should handle space-based indentation with different sizes', () => {
+        test('should handle space-based indentation with different sizes', async () => {
             const spaceIndentedContent = `rule "Space Indented"
 when
   exists(
@@ -712,7 +702,7 @@ end`;
             }
         });
 
-        test('should handle mixed indentation styles', () => {
+        test('should handle mixed indentation styles', async () => {
             const mixedIndentationContent = `rule "Mixed Indentation"
 when
 \texists(
@@ -768,7 +758,7 @@ end`;
             }
         });
 
-        test('should handle range formatting within multi-line patterns', () => {
+        test('should handle range formatting within multi-line patterns', async () => {
             const rangeFormattingContent = `rule "Range Formatting"
 when
     exists(
@@ -827,7 +817,7 @@ end`;
             }
         });
 
-        test('should preserve alignment of closing parentheses', () => {
+        test('should preserve alignment of closing parentheses', async () => {
             const alignmentContent = `rule "Alignment Test"
 when
     exists(
@@ -888,7 +878,7 @@ end`;
             }
         });
 
-        test('should handle deeply indented multi-line patterns', () => {
+        test('should handle deeply indented multi-line patterns', async () => {
             const deepIndentContent = `rule "Deep Indentation"
 when
     exists(
@@ -954,7 +944,7 @@ end`;
     });
 
     describe('Completion Behavior at Different Positions', () => {
-        test('should provide context-aware completions at pattern boundaries', () => {
+        test('should provide context-aware completions at pattern boundaries', async () => {
             const completionTestContent = `rule "Completion Test"
 when
     exists(
@@ -982,11 +972,8 @@ end`;
 
             // Test completion inside Person pattern
             const position1: Position = { line: 5, character: 20 };
-            let completions1: any;
-            expect(() => {
-                completions1 = completionProvider.provideCompletions(document, position1, parseResult);
-            }).not.toThrow();
-            
+            const completions1 = await completionProvider.provideCompletions(document, position1, parseResult.ast);
+
             expect(completions1).toBeDefined();
             if (completions1 && completions1) {
                 expect(completions1.length).toBeGreaterThanOrEqual(0);
@@ -994,24 +981,18 @@ end`;
 
             // Test completion between patterns
             const position2: Position = { line: 7, character: 8 };
-            let completions2: any;
-            expect(() => {
-                completions2 = completionProvider.provideCompletions(document, position2, parseResult);
-            }).not.toThrow();
-            
+            const completions2 = await completionProvider.provideCompletions(document, position2, parseResult.ast);
+
             expect(completions2).toBeDefined();
 
             // Test completion inside not pattern
             const position3: Position = { line: 11, character: 15 };
-            let completions3: any;
-            expect(() => {
-                completions3 = completionProvider.provideCompletions(document, position3, parseResult);
-            }).not.toThrow();
-            
+            const completions3 = await completionProvider.provideCompletions(document, position3, parseResult.ast);
+
             expect(completions3).toBeDefined();
         });
 
-        test('should provide operator completions in multi-line contexts', () => {
+        test('should provide operator completions in multi-line contexts', async () => {
             const operatorTestContent = `rule "Operator Test"
 when
     exists(
@@ -1044,16 +1025,13 @@ end`;
             ];
 
             for (const position of positions) {
-                let completions: any;
-                expect(() => {
-                    completions = completionProvider.provideCompletions(document, position, parseResult);
-                }).not.toThrow();
-                
+                const completions = await completionProvider.provideCompletions(document, position, parseResult.ast);
+
                 expect(completions).toBeDefined();
             }
         });
 
-        test('should provide keyword completions in nested contexts', () => {
+        test('should provide keyword completions in nested contexts', async () => {
             const keywordTestContent = `rule "Keyword Test"
 when
     exists(
@@ -1083,16 +1061,13 @@ end`;
             ];
 
             for (const position of positions) {
-                let completions: any;
-                expect(() => {
-                    completions = completionProvider.provideCompletions(document, position, parseResult);
-                }).not.toThrow();
-                
+                const completions = await completionProvider.provideCompletions(document, position, parseResult.ast);
+
                 expect(completions).toBeDefined();
             }
         });
 
-        test('should provide variable completions across pattern boundaries', () => {
+        test('should provide variable completions across pattern boundaries', async () => {
             const variableTestContent = `rule "Variable Test"
 when
     $person : Person(age > 18, $name : name) and
@@ -1132,16 +1107,13 @@ end`;
             ];
 
             for (const position of positions) {
-                let completions: any;
-                expect(() => {
-                    completions = completionProvider.provideCompletions(document, position, parseResult);
-                }).not.toThrow();
-                
+                const completions = await completionProvider.provideCompletions(document, position, parseResult.ast);
+
                 expect(completions).toBeDefined();
             }
         });
 
-        test('should handle completion in incomplete multi-line patterns', () => {
+        test('should handle completion in incomplete multi-line patterns', async () => {
             const incompleteContent = `rule "Incomplete Pattern"
 when
     exists(
@@ -1173,16 +1145,13 @@ end`;
             ];
 
             for (const position of positions) {
-                let completions: any;
-                expect(() => {
-                    completions = completionProvider.provideCompletions(document, position, parseResult);
-                }).not.toThrow();
-                
+                const completions = await completionProvider.provideCompletions(document, position, parseResult.ast);
+
                 expect(completions).toBeDefined();
             }
         });
 
-        test('should provide completions for nested pattern keywords', () => {
+        test('should provide completions for nested pattern keywords', async () => {
             const nestedKeywordContent = `rule "Nested Keywords"
 when
     exists(
@@ -1215,18 +1184,15 @@ end`;
             ];
 
             for (const position of positions) {
-                let completions: any;
-                expect(() => {
-                    completions = completionProvider.provideCompletions(document, position, parseResult);
-                }).not.toThrow();
-                
+                const completions = await completionProvider.provideCompletions(document, position, parseResult.ast);
+
                 expect(completions).toBeDefined();
             }
         });
     });
 
     describe('Performance and Edge Cases', () => {
-        test('should handle large multi-line patterns efficiently', () => {
+        test('should handle large multi-line patterns efficiently', async () => {
             // Create a large multi-line pattern
             let largeContent = `rule "Large Pattern"
 when
@@ -1291,7 +1257,7 @@ end`;
             if (!diagnostics) return;
         });
 
-        test('should handle malformed multi-line patterns gracefully', () => {
+        test('should handle malformed multi-line patterns gracefully', async () => {
             const malformedContent = `rule "Malformed Pattern"
 when
     exists(
@@ -1350,16 +1316,12 @@ end`;
             expect(syntaxErrors.length).toBeGreaterThan(0);
 
             // Should still provide completions where possible
-            let completions: any;
-            expect(() => {
-                completions = completionProvider.provideCompletions(document, { line: 4, character: 20 }
-                , ast);
-            }).not.toThrow();
+            const completions = await completionProvider.provideCompletions(document, { line: 4, character: 20 }, parseResult.ast);
             
             expect(completions).toBeDefined();
         });
 
-        test('should handle empty multi-line patterns', () => {
+        test('should handle empty multi-line patterns', async () => {
             const emptyPatternContent = `rule "Empty Patterns"
 when
     exists(

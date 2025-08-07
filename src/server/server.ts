@@ -603,7 +603,7 @@ connection.onCompletion(
             return completionProvider.provideCompletions(
                 document,
                 textDocumentPosition.position,
-                parseResult
+                parseResult.ast
             );
             
         } catch (error) {
@@ -661,7 +661,7 @@ connection.onSignatureHelp(
             return completionProvider.provideSignatureHelp(
                 document,
                 textDocumentPosition.position,
-                parseResult
+                parseResult.ast
             );
             
         } catch (error) {

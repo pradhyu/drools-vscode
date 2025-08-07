@@ -813,8 +813,8 @@ export class DroolsParser {
             const attrLine = this.lines[this.currentLine].trim();
             if (attrLine === 'when') {break;}
             if (attrLine && !attrLine.startsWith('//')) {
-                // Simple attribute parsing
-                const attrMatch = attrLine.match(/(\w+)\s*(.*)$/);
+                // Simple attribute parsing - include hyphens for attributes like no-loop, lock-on-active
+                const attrMatch = attrLine.match(/([a-zA-Z-]+)\s*(.*)$/);
                 if (attrMatch) {
                     attributes.push({
                         type: 'RuleAttribute',
@@ -1017,6 +1017,9 @@ export class DroolsParser {
         // Detect condition type
         const conditionType = this.detectConditionType(content);
         
+        // Extract variable, fact type, and constraints
+        const { variable, factType, constraints } = this.parseConditionComponents(content);
+        
         // Check if this is a multi-line pattern
         const isMultiLine = content.includes('\n') || this.detectMultiLinePattern(content, startPos) !== null;
         
@@ -1028,10 +1031,17 @@ export class DroolsParser {
             }
         }
         
+        // For multi-line patterns, use the pattern type as the node type
+        // For regular conditions, use 'Condition'
+        const nodeType = (isMultiLine && multiLinePattern) ? conditionType : 'Condition';
+        
         return {
-            type: 'Condition',
+            type: nodeType as any,
             conditionType,
             content: content.trim(),
+            variable,
+            factType,
+            constraints,
             range: { start: startPos, end: endPos },
             isMultiLine,
             spanLines: isMultiLine ? this.calculateSpanLines(content, startPos) : undefined,
@@ -1185,33 +1195,47 @@ export class DroolsParser {
             { keyword: 'accumulate', type: 'accumulate' as const }
         ];
         
+        // Find the outermost pattern (the one that appears first in the content)
+        let outermostPattern: { keyword: string; type: any; position: number } | null = null;
+        
         for (const pattern of patterns) {
             const regex = new RegExp(`\\b${pattern.keyword}\\s*\\(`);
-            if (regex.test(content)) {
-                // Check if this is a multi-line pattern (contains newlines or has complex structure)
-                const hasNewlines = content.includes('\n');
-                const openCount = (content.match(/\(/g) || []).length;
-                const closeCount = (content.match(/\)/g) || []).length;
-                
-                // Consider it a multi-line pattern if:
-                // 1. It contains newlines, OR
-                // 2. It has unbalanced parentheses (incomplete), OR
-                // 3. It has nested patterns
-                if (hasNewlines || openCount !== closeCount || this.hasNestedPatterns(content, pattern.keyword)) {
-                    const lines = content.split('\n');
-                    return {
-                        type: pattern.type,
+            const match = content.match(regex);
+            if (match && match.index !== undefined) {
+                if (!outermostPattern || match.index < outermostPattern.position) {
+                    outermostPattern = {
                         keyword: pattern.keyword,
-                        startLine: startPosition.line,
-                        endLine: startPosition.line + lines.length - 1,
-                        startColumn: startPosition.character,
-                        endColumn: startPosition.character + lines[lines.length - 1].length,
-                        content: content,
-                        nestedPatterns: [],
-                        parenthesesRanges: [],
-                        isComplete: openCount === closeCount
+                        type: pattern.type,
+                        position: match.index
                     };
                 }
+            }
+        }
+        
+        if (outermostPattern) {
+            // Check if this is a multi-line pattern (contains newlines or has complex structure)
+            const hasNewlines = content.includes('\n');
+            const openCount = (content.match(/\(/g) || []).length;
+            const closeCount = (content.match(/\)/g) || []).length;
+            
+            // Consider it a multi-line pattern if:
+            // 1. It contains newlines, OR
+            // 2. It has unbalanced parentheses (incomplete), OR
+            // 3. It has nested patterns
+            if (hasNewlines || openCount !== closeCount || this.hasNestedPatterns(content, outermostPattern.keyword)) {
+                const lines = content.split('\n');
+                return {
+                    type: outermostPattern.type,
+                    keyword: outermostPattern.keyword,
+                    startLine: startPosition.line,
+                    endLine: startPosition.line + lines.length - 1,
+                    startColumn: startPosition.character,
+                    endColumn: startPosition.character + lines[lines.length - 1].length,
+                    content: content,
+                    nestedPatterns: [],
+                    parenthesesRanges: [],
+                    isComplete: openCount === closeCount
+                };
             }
         }
         
@@ -1228,11 +1252,10 @@ export class DroolsParser {
         const innerContent = content.replace(new RegExp(`^\\s*${parentKeyword}\\s*\\(`), '');
         
         for (const pattern of patterns) {
-            if (pattern !== parentKeyword) {
-                const regex = new RegExp(`\\b${pattern}\\s*\\(`);
-                if (regex.test(innerContent)) {
-                    return true;
-                }
+            // Check for any nested patterns, including the same type as parent
+            const regex = new RegExp(`\\b${pattern}\\s*\\(`);
+            if (regex.test(innerContent)) {
+                return true;
             }
         }
         
@@ -1549,15 +1572,18 @@ export class DroolsParser {
             multiLinePattern = this.createMultiLinePatternNode(nestedPattern, depth + 1);
         }
         
+        const isMultiLine = content.includes('\n') || !!multiLinePattern;
+        const nodeType = (isMultiLine && multiLinePattern) ? conditionType : 'Condition';
+        
         return {
-            type: 'Condition',
+            type: nodeType as any,
             conditionType,
             content: content.trim(),
             variable,
             factType,
             constraints,
             range: { start: startPos, end: endPos },
-            isMultiLine: content.includes('\n') || !!multiLinePattern,
+            isMultiLine,
             spanLines: this.calculateSpanLines(content, startPos),
             parenthesesRanges: this.extractParenthesesRangesFromContent(content, startPos),
             multiLinePattern,
@@ -1609,10 +1635,22 @@ export class DroolsParser {
     } {
         const trimmed = content.trim();
         
-        // Simple pattern matching for basic fact patterns
-        const factPatternMatch = trimmed.match(/^(\$?\w+)\s*:\s*(\w+)\s*\((.*)\)$/);
+        // Enhanced pattern matching for fact patterns that may continue with 'and' or 'or'
+        // Match: $var : Type(...) [and/or ...]
+        const factPatternMatch = trimmed.match(/^(\$\w+)\s*:\s*(\w+)\s*\([^)]*\)/);
         if (factPatternMatch) {
-            const [, variable, factType, constraintsStr] = factPatternMatch;
+            const [matchedPart, variable, factType] = factPatternMatch;
+            // Extract constraints from the matched part
+            const constraintsMatch = matchedPart.match(/\(([^)]*)\)/);
+            const constraintsStr = constraintsMatch ? constraintsMatch[1] : '';
+            const constraints = this.parseConstraints(constraintsStr);
+            return { variable, factType, constraints };
+        }
+        
+        // Simple pattern matching for basic fact patterns (complete patterns)
+        const completeFactPatternMatch = trimmed.match(/^(\$?\w+)\s*:\s*(\w+)\s*\((.*)\)$/);
+        if (completeFactPatternMatch) {
+            const [, variable, factType, constraintsStr] = completeFactPatternMatch;
             const constraints = this.parseConstraints(constraintsStr);
             return { variable, factType, constraints };
         }
@@ -2109,6 +2147,7 @@ export class DroolsParser {
      */
     private createFallbackAST(content: string, startPosition: Position, endPosition: Position): ConditionNode {
         // Create a generic condition node that preserves the content
+        // For fallback AST, always use 'Condition' type since content may be malformed
         return {
             type: 'Condition',
             conditionType: 'pattern', // Default to pattern type
