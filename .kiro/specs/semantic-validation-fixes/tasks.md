@@ -8,7 +8,7 @@
   - Write unit tests for validation state management functionality
   - _Requirements: 1.1, 1.3, 1.5_
 
-- [-] 2. Remove duplicate semantic validation calls
+- [x] 2. Remove duplicate semantic validation calls
   - Identify and remove the duplicate validateSemantics call at line 1483 in diagnosticProvider.ts
   - Refactor provideDiagnostics method to use validation coordination
   - Add validation state checks before running semantic validation

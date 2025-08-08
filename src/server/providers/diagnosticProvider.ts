@@ -1492,32 +1492,40 @@ export class DroolsDiagnosticProvider {
     private validateAttributeValue(rule: RuleNode, attribute: any, diagnostics: Diagnostic[]): void {
         switch (attribute.name) {
             case 'salience':
-                if (attribute.value !== undefined && typeof attribute.value !== 'number') {
-                    diagnostics.push({
-                        severity: DiagnosticSeverity.Error,
-                        range: {
-                            start: { line: attribute.range?.start.line || rule.range.start.line, character: attribute.range?.start.character || 0 },
-                            end: { line: attribute.range?.end.line || rule.range.start.line, character: attribute.range?.end.character || 100 }
-                        },
-                        message: 'Salience value must be a number',
-                        source: 'drools-semantic'
-                    });
+                if (attribute.value !== undefined) {
+                    // Handle both number and string representations
+                    const numValue = typeof attribute.value === 'number' ? attribute.value : parseFloat(attribute.value);
+                    if (isNaN(numValue)) {
+                        diagnostics.push({
+                            severity: DiagnosticSeverity.Error,
+                            range: {
+                                start: { line: attribute.range?.start.line || rule.range.start.line, character: attribute.range?.start.character || 0 },
+                                end: { line: attribute.range?.end.line || rule.range.start.line, character: attribute.range?.end.character || 100 }
+                            },
+                            message: 'Salience value must be a number',
+                            source: 'drools-semantic'
+                        });
+                    }
                 }
                 break;
             case 'no-loop':
             case 'auto-focus':
             case 'lock-on-active':
             case 'enabled':
-                if (attribute.value !== undefined && typeof attribute.value !== 'boolean') {
-                    diagnostics.push({
-                        severity: DiagnosticSeverity.Error,
-                        range: {
-                            start: { line: attribute.range?.start.line || rule.range.start.line, character: attribute.range?.start.character || 0 },
-                            end: { line: attribute.range?.end.line || rule.range.start.line, character: attribute.range?.end.character || 100 }
-                        },
-                        message: `${attribute.name} value must be true or false`,
-                        source: 'drools-semantic'
-                    });
+                if (attribute.value !== undefined) {
+                    // Handle both boolean and string representations
+                    const strValue = String(attribute.value).toLowerCase();
+                    if (strValue !== 'true' && strValue !== 'false' && typeof attribute.value !== 'boolean') {
+                        diagnostics.push({
+                            severity: DiagnosticSeverity.Error,
+                            range: {
+                                start: { line: attribute.range?.start.line || rule.range.start.line, character: attribute.range?.start.character || 0 },
+                                end: { line: attribute.range?.end.line || rule.range.start.line, character: attribute.range?.end.character || 100 }
+                            },
+                            message: `${attribute.name} value must be true or false`,
+                            source: 'drools-semantic'
+                        });
+                    }
                 }
                 break;
             case 'dialect':
