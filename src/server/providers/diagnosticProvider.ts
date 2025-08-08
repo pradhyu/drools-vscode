@@ -8,6 +8,184 @@ import { TextDocument } from 'vscode-languageserver-textdocument';
 import { DroolsAST, AnyASTNode, RuleNode, FunctionNode, ConditionNode, WhenNode, ThenNode, MultiLinePatternNode, MultiLinePatternMetadata, ParenthesesTracker, Position, Range } from '../parser/ast';
 import { ParseError } from '../parser/droolsParser';
 
+/**
+ * Validation types for coordinating different validation phases
+ */
+enum ValidationType {
+    SYNTAX = 'syntax',
+    SEMANTIC = 'semantic',
+    BEST_PRACTICE = 'best-practice',
+    MULTILINE_PATTERNS = 'multiline-patterns'
+}
+
+/**
+ * Manages validation state to prevent duplicate validation runs
+ */
+class ValidationState {
+    private completedValidations: Set<ValidationType> = new Set();
+    
+    reset(): void {
+        this.completedValidations.clear();
+    }
+    
+    isComplete(type: ValidationType): boolean {
+        return this.completedValidations.has(type);
+    }
+    
+    markComplete(type: ValidationType): void {
+        this.completedValidations.add(type);
+    }
+}
+
+/**
+ * Coordinates validation execution to prevent duplication
+ */
+interface ValidationCoordinator {
+    coordinateValidation(ast: DroolsAST, diagnostics: Diagnostic[]): void;
+    isValidationAlreadyRun(validationType: ValidationType): boolean;
+    markValidationComplete(validationType: ValidationType): void;
+}
+
+/**
+ * Context passed between validation methods
+ */
+interface ValidationContext {
+    document: TextDocument;
+    ast: DroolsAST;
+    parseErrors: ParseError[];
+    settings: DiagnosticSettings;
+    validationState: ValidationState;
+}
+
+/**
+ * Result of rule name validation
+ */
+interface RuleNameValidationResult {
+    isValid: boolean;
+    issues: ValidationIssue[];
+    isQuoted: boolean;
+    unquotedName: string;
+}
+
+/**
+ * Individual validation issue
+ */
+interface ValidationIssue {
+    severity: DiagnosticSeverity;
+    message: string;
+    suggestion?: string;
+}
+
+/**
+ * Enhanced rule name validator interface
+ */
+interface RuleNameValidator {
+    validateRuleName(rule: RuleNode): RuleNameValidationResult;
+    isQuotedRuleName(ruleName: string): boolean;
+    extractUnquotedRuleName(ruleName: string): string;
+    validateUnquotedRuleName(ruleName: string): ValidationIssue[];
+    validateQuotedRuleName(ruleName: string): ValidationIssue[];
+}
+
+/**
+ * Enhanced rule name validator implementation
+ */
+class EnhancedRuleNameValidator implements RuleNameValidator {
+    validateRuleName(rule: RuleNode): RuleNameValidationResult {
+        if (!rule.name || rule.name.trim() === '') {
+            return {
+                isValid: false,
+                issues: [{
+                    severity: DiagnosticSeverity.Error,
+                    message: 'Rule must have a name'
+                }],
+                isQuoted: false,
+                unquotedName: ''
+            };
+        }
+
+        const isQuoted = this.isQuotedRuleName(rule.name);
+        const unquotedName = this.extractUnquotedRuleName(rule.name);
+        
+        const issues = isQuoted ? 
+            this.validateQuotedRuleName(rule.name) : 
+            this.validateUnquotedRuleName(rule.name);
+
+        return {
+            isValid: issues.length === 0,
+            issues,
+            isQuoted,
+            unquotedName
+        };
+    }
+
+    isQuotedRuleName(ruleName: string): boolean {
+        return ruleName.startsWith('"') && ruleName.endsWith('"') && ruleName.length >= 2;
+    }
+
+    extractUnquotedRuleName(ruleName: string): string {
+        if (this.isQuotedRuleName(ruleName)) {
+            return ruleName.slice(1, -1); // Remove surrounding quotes
+        }
+        return ruleName;
+    }
+
+    validateUnquotedRuleName(ruleName: string): ValidationIssue[] {
+        const issues: ValidationIssue[] = [];
+
+        // Check for spaces or special characters that require quoting
+        if (/[\s\-\.]/.test(ruleName)) {
+            issues.push({
+                severity: DiagnosticSeverity.Warning,
+                message: 'Rule names with spaces or special characters should be quoted',
+                suggestion: `"${ruleName}"`
+            });
+        }
+
+        // Check for invalid characters
+        if (!/^[a-zA-Z0-9_\-\.]+$/.test(ruleName)) {
+            issues.push({
+                severity: DiagnosticSeverity.Error,
+                message: `Rule name "${ruleName}" contains invalid characters`
+            });
+        }
+
+        return issues;
+    }
+
+    validateQuotedRuleName(ruleName: string): ValidationIssue[] {
+        const issues: ValidationIssue[] = [];
+        const unquoted = this.extractUnquotedRuleName(ruleName);
+
+        // Check for empty quoted name
+        if (unquoted.trim() === '') {
+            issues.push({
+                severity: DiagnosticSeverity.Error,
+                message: 'Quoted rule name cannot be empty'
+            });
+        }
+
+        // Check for unescaped quotes inside
+        if (unquoted.includes('"') && !unquoted.includes('\\"')) {
+            issues.push({
+                severity: DiagnosticSeverity.Error,
+                message: 'Quotes inside rule names must be escaped with backslash'
+            });
+        }
+
+        // Check for very long names
+        if (unquoted.length > 100) {
+            issues.push({
+                severity: DiagnosticSeverity.Information,
+                message: `Rule name is very long (${unquoted.length} characters)`,
+                suggestion: 'Consider using a shorter, more concise name'
+            });
+        }
+
+        return issues;
+    }
+}
+
 export interface DiagnosticSettings {
     maxNumberOfProblems: number;
     enableSyntaxValidation: boolean;
@@ -15,13 +193,29 @@ export interface DiagnosticSettings {
     enableBestPracticeWarnings: boolean;
 }
 
-export class DroolsDiagnosticProvider {
+export class DroolsDiagnosticProvider implements ValidationCoordinator {
     private settings: DiagnosticSettings;
     private document!: TextDocument;
     private documentLines!: string[];
+    private validationState: ValidationState = new ValidationState();
+    private ruleNameValidator: RuleNameValidator = new EnhancedRuleNameValidator();
 
     constructor(settings: DiagnosticSettings) {
         this.settings = settings;
+    }
+
+    /**
+     * Check if a validation type has already been run
+     */
+    public isValidationAlreadyRun(validationType: ValidationType): boolean {
+        return this.validationState.isComplete(validationType);
+    }
+
+    /**
+     * Mark a validation type as complete
+     */
+    public markValidationComplete(validationType: ValidationType): void {
+        this.validationState.markComplete(validationType);
     }
 
     /**
@@ -33,36 +227,49 @@ export class DroolsDiagnosticProvider {
         
         const diagnostics: Diagnostic[] = [];
 
+        // Reset validation state for new validation cycle
+        this.validationState.reset();
+
         // Convert parser errors to diagnostics
         if (this.settings.enableSyntaxValidation) {
             this.addParseErrorDiagnostics(parseErrors, diagnostics);
         }
 
-        // Perform semantic validation with fixed false positive issues
-        if (this.settings.enableSemanticValidation) {
-            this.validateSemantics(ast, diagnostics);
-        }
-
-        // Validate Drools keywords and language constructs
-        if (this.settings.enableSyntaxValidation) {
-            this.validateDroolsKeywords(diagnostics);
-        }
-
-        // Check best practices with corrected logic
-        if (this.settings.enableBestPracticeWarnings) {
-            this.validateBestPractices(ast, diagnostics);
-        }
-
-        // Additional syntax validation beyond parser
-        this.validateSyntaxDetails(ast, diagnostics);
-
-        // Validate multi-line patterns
-        if (this.settings.enableSyntaxValidation) {
-            this.validateMultiLinePatterns(ast, diagnostics);
-        }
+        // Coordinate all validation types to prevent duplication
+        this.coordinateValidation(ast, diagnostics);
 
         // Limit the number of diagnostics
         return diagnostics.slice(0, this.settings.maxNumberOfProblems);
+    }
+
+    /**
+     * Coordinate validation execution to prevent duplication
+     */
+    public coordinateValidation(ast: DroolsAST, diagnostics: Diagnostic[]): void {
+        // Syntax validation (includes keywords and syntax details)
+        if (this.settings.enableSyntaxValidation && !this.validationState.isComplete(ValidationType.SYNTAX)) {
+            this.validateDroolsKeywords(diagnostics);
+            this.validateSyntaxDetails(ast, diagnostics);
+            this.validationState.markComplete(ValidationType.SYNTAX);
+        }
+
+        // Semantic validation - ONLY ONCE
+        if (this.settings.enableSemanticValidation && !this.validationState.isComplete(ValidationType.SEMANTIC)) {
+            this.validateSemantics(ast, diagnostics);
+            this.validationState.markComplete(ValidationType.SEMANTIC);
+        }
+
+        // Best practice validation
+        if (this.settings.enableBestPracticeWarnings && !this.validationState.isComplete(ValidationType.BEST_PRACTICE)) {
+            this.validateBestPractices(ast, diagnostics);
+            this.validationState.markComplete(ValidationType.BEST_PRACTICE);
+        }
+
+        // Multi-line pattern validation
+        if (this.settings.enableSyntaxValidation && !this.validationState.isComplete(ValidationType.MULTILINE_PATTERNS)) {
+            this.validateMultiLinePatterns(ast, diagnostics);
+            this.validationState.markComplete(ValidationType.MULTILINE_PATTERNS);
+        }
     }
 
     /**
@@ -202,53 +409,19 @@ export class DroolsDiagnosticProvider {
      */
     private validateDroolsRuleStructure(ast: DroolsAST, diagnostics: Diagnostic[]): void {
         for (const rule of ast.rules) {
-            // Rule must have a name
-            if (!rule.name || rule.name.trim() === '') {
+            // Use enhanced rule name validator
+            const nameValidation = this.ruleNameValidator.validateRuleName(rule);
+            
+            for (const issue of nameValidation.issues) {
                 diagnostics.push({
-                    severity: DiagnosticSeverity.Error,
                     range: {
                         start: { line: rule.range.start.line, character: rule.range.start.character },
                         end: { line: rule.range.end.line, character: rule.range.end.character }
                     },
-                    message: 'Rule must have a name',
+                    message: issue.message,
+                    severity: issue.severity,
                     source: 'drools-semantic'
                 });
-            }
-
-            // Rule name should be quoted if it contains spaces or special characters
-            // Note: rule.name contains the unquoted content, so we need to check if the original was quoted
-            const ruleLineIndex = rule.range.start.line;
-            if (ruleLineIndex < this.documentLines.length) {
-                const ruleLine = this.documentLines[ruleLineIndex];
-                const quotedRulePattern = /rule\s+"[^"]+"/;
-                
-                // Check if rule.name has spaces/special chars and is not quoted
-                if (rule.name && /[\s\-\.]/.test(rule.name) && !quotedRulePattern.test(ruleLine)) {
-                    diagnostics.push({
-                        severity: DiagnosticSeverity.Warning,
-                        range: {
-                            start: { line: rule.range.start.line, character: rule.range.start.character },
-                            end: { line: rule.range.end.line, character: rule.range.end.character }
-                        },
-                        message: 'Rule names with spaces or special characters should be quoted',
-                        source: 'drools-semantic'
-                    });
-                }
-                
-                // Also check if the original line has unquoted spaces (parser limitation case)
-                const unquotedWithSpacesPattern = /rule\s+([^\s"]+\s+[^"]*?)(?:\s+when|\s*$)/;
-                const unquotedMatch = ruleLine.match(unquotedWithSpacesPattern);
-                if (unquotedMatch && !quotedRulePattern.test(ruleLine)) {
-                    diagnostics.push({
-                        severity: DiagnosticSeverity.Warning,
-                        range: {
-                            start: { line: rule.range.start.line, character: rule.range.start.character },
-                            end: { line: rule.range.end.line, character: rule.range.end.character }
-                        },
-                        message: 'Rule names with spaces or special characters should be quoted',
-                        source: 'drools-semantic'
-                    });
-                }
             }
 
             // A rule should have at least a when or then clause (or both)
@@ -847,6 +1020,21 @@ export class DroolsDiagnosticProvider {
                     source: 'drools-semantic'
                 });
             }
+        }
+
+        // Check for invalid semicolons in LHS (when clause)
+        // Semicolons are not allowed in Drools LHS conditions
+        if (content.includes(';')) {
+            const semicolonIndex = content.indexOf(';');
+            diagnostics.push({
+                severity: DiagnosticSeverity.Error,
+                range: {
+                    start: { line: condition.range.start.line, character: condition.range.start.character + semicolonIndex },
+                    end: { line: condition.range.start.line, character: condition.range.start.character + semicolonIndex + 1 }
+                },
+                message: 'Semicolons are not allowed in when clause conditions. Remove the semicolon.',
+                source: 'drools-semantic'
+            });
         }
 
         // Check for missing colons in variable declarations
@@ -1698,14 +1886,20 @@ export class DroolsDiagnosticProvider {
 
         // Check for malformed accumulate patterns
         if (pattern.patternType === 'accumulate') {
-            if (!content.includes('init:') || !content.includes('action:') || !content.includes('result:')) {
+            // Accumulate can use either:
+            // 1. Built-in functions: sum(), count(), avg(), min(), max(), etc.
+            // 2. Custom functions with init:, action:, result: clauses
+            const hasBuiltInFunction = /\b(sum|count|avg|average|min|max|collectList|collectSet)\s*\(/.test(content);
+            const hasCustomClauses = content.includes('init:') && content.includes('action:') && content.includes('result:');
+            
+            if (!hasBuiltInFunction && !hasCustomClauses) {
                 diagnostics.push({
                     severity: DiagnosticSeverity.Error,
                     range: {
                         start: { line: pattern.range.start.line, character: pattern.range.start.character },
                         end: { line: pattern.range.end.line, character: pattern.range.end.character }
                     },
-                    message: 'accumulate pattern must contain init:, action:, and result: clauses',
+                    message: 'accumulate pattern must use either built-in functions (sum, count, avg, etc.) or custom init:, action:, result: clauses',
                     source: 'drools-multiline'
                 });
             }

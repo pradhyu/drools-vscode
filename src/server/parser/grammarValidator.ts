@@ -551,8 +551,10 @@ export class GrammarValidator {
      * Check if import path is valid
      */
     private isValidImportPath(path: string): boolean {
-        // Java package naming: lowercase letters, dots, and underscores
-        return /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*(\.\*)?$/.test(path);
+        // Java package naming: allow both lowercase packages and uppercase class names
+        // Examples: org.drools.examples.helloworld.Message, java.util.List, static imports
+        // Pattern: package.parts.ClassName or package.parts.*
+        return /^[a-zA-Z_$][a-zA-Z0-9_$]*(\.[a-zA-Z_$][a-zA-Z0-9_$]*)*(\.\*)?$/.test(path);
     }
 
     /**

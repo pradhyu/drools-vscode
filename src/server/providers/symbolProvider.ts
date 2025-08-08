@@ -339,6 +339,11 @@ export class DroolsSymbolProvider {
         // Remove newline character if present
         const cleanLine = line.replace(/\n$/, '');
 
+        // Check if the position is inside a string literal
+        if (this.isPositionInStringLiteral(cleanLine, position.character)) {
+            return null; // Don't provide navigation for variables inside string literals
+        }
+
         // More comprehensive word regex that handles function calls and identifiers
         const wordRegex = /[a-zA-Z_$][a-zA-Z0-9_$]*/g;
         let match;
@@ -367,6 +372,45 @@ export class DroolsSymbolProvider {
         }
 
         return bestMatch;
+    }
+
+    /**
+     * Check if a position is inside a string literal
+     */
+    private isPositionInStringLiteral(line: string, position: number): boolean {
+        let inString = false;
+        let stringChar = '';
+        let escaped = false;
+
+        for (let i = 0; i < line.length; i++) {
+            const char = line[i];
+
+            if (escaped) {
+                escaped = false;
+                continue;
+            }
+
+            if (char === '\\' && inString) {
+                escaped = true;
+                continue;
+            }
+
+            if (!inString && (char === '"' || char === "'")) {
+                inString = true;
+                stringChar = char;
+            } else if (inString && char === stringChar) {
+                inString = false;
+                stringChar = '';
+            }
+
+            // If we've reached the position and we're inside a string, return true
+            if (i === position && inString) {
+                return true;
+            }
+        }
+
+        // If position is at the end and we're still in a string
+        return position >= line.length && inString;
     }
 
     /**
