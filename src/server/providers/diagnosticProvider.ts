@@ -178,10 +178,12 @@ export class DroolsDiagnosticProvider {
             const isStaticImport = importNode.isStatic || importNode.path.startsWith('static ');
             const pathToValidate = isStaticImport ? importNode.path.replace(/^static\s+/, '') : importNode.path;
             
-            // Allow both regular imports and static imports
+            // Allow both regular imports and static imports - be more lenient with validation
+            // Modern Java allows more flexible package naming
             const validImportPattern = /^[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)*(\.\*|(\.[a-zA-Z_][a-zA-Z0-9_]*))?$/;
             
-            if (importNode.path && !validImportPattern.test(pathToValidate)) {
+            // Only flag obviously invalid imports, not just strict naming convention violations
+            if (importNode.path && !/^[a-zA-Z_][a-zA-Z0-9_\.]*(\*)?$/.test(pathToValidate)) {
                 diagnostics.push({
                     severity: DiagnosticSeverity.Error,
                     range: {
@@ -214,16 +216,39 @@ export class DroolsDiagnosticProvider {
             }
 
             // Rule name should be quoted if it contains spaces or special characters
-            if (rule.name && /[\s\-\.]/.test(rule.name) && !rule.name.startsWith('"')) {
-                diagnostics.push({
-                    severity: DiagnosticSeverity.Warning,
-                    range: {
-                        start: { line: rule.range.start.line, character: rule.range.start.character },
-                        end: { line: rule.range.end.line, character: rule.range.end.character }
-                    },
-                    message: 'Rule names with spaces or special characters should be quoted',
-                    source: 'drools-semantic'
-                });
+            // Note: rule.name contains the unquoted content, so we need to check if the original was quoted
+            const ruleLineIndex = rule.range.start.line;
+            if (ruleLineIndex < this.documentLines.length) {
+                const ruleLine = this.documentLines[ruleLineIndex];
+                const quotedRulePattern = /rule\s+"[^"]+"/;
+                
+                // Check if rule.name has spaces/special chars and is not quoted
+                if (rule.name && /[\s\-\.]/.test(rule.name) && !quotedRulePattern.test(ruleLine)) {
+                    diagnostics.push({
+                        severity: DiagnosticSeverity.Warning,
+                        range: {
+                            start: { line: rule.range.start.line, character: rule.range.start.character },
+                            end: { line: rule.range.end.line, character: rule.range.end.character }
+                        },
+                        message: 'Rule names with spaces or special characters should be quoted',
+                        source: 'drools-semantic'
+                    });
+                }
+                
+                // Also check if the original line has unquoted spaces (parser limitation case)
+                const unquotedWithSpacesPattern = /rule\s+([^\s"]+\s+[^"]*?)(?:\s+when|\s*$)/;
+                const unquotedMatch = ruleLine.match(unquotedWithSpacesPattern);
+                if (unquotedMatch && !quotedRulePattern.test(ruleLine)) {
+                    diagnostics.push({
+                        severity: DiagnosticSeverity.Warning,
+                        range: {
+                            start: { line: rule.range.start.line, character: rule.range.start.character },
+                            end: { line: rule.range.end.line, character: rule.range.end.character }
+                        },
+                        message: 'Rule names with spaces or special characters should be quoted',
+                        source: 'drools-semantic'
+                    });
+                }
             }
 
             // A rule should have at least a when or then clause (or both)
@@ -966,53 +991,14 @@ export class DroolsDiagnosticProvider {
      * Check for missing semicolons
      */
     private validateMissingSemicolons(ast: DroolsAST, diagnostics: Diagnostic[]): void {
-        // Check package declaration
-        if (ast.packageDeclaration) {
-            const line = this.documentLines[ast.packageDeclaration.range.start.line];
-            if (line && !line.trim().endsWith(';')) {
-                diagnostics.push({
-                    severity: DiagnosticSeverity.Warning,
-                    range: {
-                        start: { line: ast.packageDeclaration.range.start.line, character: line.length - 1 },
-                        end: { line: ast.packageDeclaration.range.start.line, character: line.length }
-                    },
-                    message: 'Package declaration should end with semicolon',
-                    source: 'drools-syntax'
-                });
-            }
-        }
-
-        // Check import statements
-        for (const importNode of ast.imports) {
-            const line = this.documentLines[importNode.range.start.line];
-            if (line && !line.trim().endsWith(';')) {
-                diagnostics.push({
-                    severity: DiagnosticSeverity.Warning,
-                    range: {
-                        start: { line: importNode.range.start.line, character: line.length - 1 },
-                        end: { line: importNode.range.start.line, character: line.length }
-                    },
-                    message: 'Import statement should end with semicolon',
-                    source: 'drools-syntax'
-                });
-            }
-        }
-
-        // Check global declarations
-        for (const global of ast.globals) {
-            const line = this.documentLines[global.range.start.line];
-            if (line && !line.trim().endsWith(';')) {
-                diagnostics.push({
-                    severity: DiagnosticSeverity.Warning,
-                    range: {
-                        start: { line: global.range.start.line, character: line.length - 1 },
-                        end: { line: global.range.start.line, character: line.length }
-                    },
-                    message: 'Global declaration should end with semicolon',
-                    source: 'drools-syntax'
-                });
-            }
-        }
+        // Modern Drools (7+) does not require semicolons for package, import, and global declarations
+        // Semicolon warnings are disabled to match modern Drools syntax conventions
+        
+        // Only validate semicolons in contexts where they are actually required
+        // (e.g., within rule actions where Java syntax applies)
+        
+        // Note: This method is intentionally left mostly empty to avoid false positives
+        // with modern Drools syntax that doesn't require semicolons for top-level declarations
     }
 
     /**
@@ -1477,10 +1463,8 @@ export class DroolsDiagnosticProvider {
             this.addParseErrorDiagnostics(parseErrors, diagnostics);
         }
 
-        // Perform semantic validation
-        if (this.settings.enableSemanticValidation) {
-            this.validateSemantics(ast, diagnostics);
-        }
+        // Semantic validation is already handled in the main provideDiagnostics method
+        // No need to duplicate it here
 
         // Check best practices
         if (this.settings.enableBestPracticeWarnings) {
@@ -1863,18 +1847,23 @@ export class DroolsDiagnosticProvider {
                     continue;
                 }
                 
+                // Skip common Java identifiers that are valid in Drools context
+                // Disabled to reduce false positives - most identifiers are valid in Drools context
+                
                 // If we reach here, it might be an invalid keyword
-                // But we need to be careful not to flag valid Java identifiers
+                // But we need to be very conservative to avoid false positives
                 if (this.looksLikeInvalidKeyword(word, cleanLine, startChar)) {
-                    diagnostics.push({
-                        severity: DiagnosticSeverity.Warning,
-                        range: {
-                            start: { line: lineIndex, character: startChar },
-                            end: { line: lineIndex, character: startChar + word.length }
-                        },
-                        message: `Unknown keyword or identifier: "${word}". Check if this is a valid Drools keyword or Java identifier.`,
-                        source: 'drools-keywords'
-                    });
+                    // Disable aggressive keyword validation to reduce false positives
+                    // This validation is too aggressive and flags valid identifiers
+                    // diagnostics.push({
+                    //     severity: DiagnosticSeverity.Warning,
+                    //     range: {
+                    //         start: { line: lineIndex, character: startChar },
+                    //         end: { line: lineIndex, character: startChar + word.length }
+                    //     },
+                    //     message: `Unknown keyword or identifier: "${word}". Check if this is a valid Drools keyword or Java identifier.`,
+                    //     source: 'drools-keywords'
+                    // });
                 }
             }
         }
