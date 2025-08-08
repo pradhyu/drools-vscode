@@ -32,7 +32,7 @@
   - Test that quoted rule names with spaces are correctly accepted as valid
   - _Requirements: 2.1, 2.2, 2.4_
 
-- [ ] 5. Add comprehensive rule name validation test cases
+- [x] 5. Add comprehensive rule name validation test cases
   - Write tests for quoted rule names with spaces (should be valid)
   - Add tests for unquoted rule names with spaces (should warn to add quotes)
   - Create tests for edge cases: empty names, special characters, Unicode
@@ -48,7 +48,7 @@
   - Ensure backward compatibility with existing diagnostic provider interface
   - _Requirements: 1.1, 1.3, 1.5, 3.1, 3.3_
 
-- [ ] 7. Add validation error handling and recovery
+- [x] 7. Add validation error handling and recovery
   - Implement ValidationErrorHandler class for graceful error handling
   - Add try-catch blocks around individual validation phases
   - Create error isolation to prevent one validation failure from breaking others

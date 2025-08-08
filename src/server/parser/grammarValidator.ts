@@ -500,11 +500,26 @@ export class GrammarValidator {
 
     /**
      * Check if identifier follows ANTLR rules
+     * Note: For quoted rule names, Drools allows most characters except unescaped quotes
      */
     private isValidIdentifier(identifier: string): boolean {
-        // ANTLR ID rule: IdentifierStart IdentifierPart*
-        // Note: Rule names in Drools can contain spaces and are quoted strings
-        return /^[a-zA-Z_$][a-zA-Z0-9_$\s]*$/.test(identifier);
+        // For rule names, we need to be more lenient since they can be quoted strings
+        // Quoted rule names in Drools can contain most characters except unescaped quotes
+        
+        // Check for empty identifier
+        if (!identifier || identifier.trim() === '') {
+            return false;
+        }
+        
+        // Check for unescaped quotes (which would break the parsing)
+        // Allow escaped quotes (\") but not unescaped quotes
+        if (identifier.includes('"') && !identifier.includes('\\"')) {
+            return false;
+        }
+        
+        // For quoted rule names, allow most characters
+        // Only restrict truly problematic characters
+        return true; // Be very lenient for quoted rule names
     }
 
     /**

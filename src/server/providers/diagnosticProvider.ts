@@ -263,6 +263,19 @@ export class DroolsDiagnosticProvider {
                     source: 'drools-semantic'
                 });
             }
+
+            // Validate conditions in when clause for syntax errors
+            if (rule.when) {
+                this.validateConditions(rule.when, diagnostics);
+            }
+
+            // Validate then clause for Java syntax errors
+            if (rule.then) {
+                this.validateThenClause(rule.then, diagnostics);
+            }
+
+            // Validate variable usage between LHS and RHS
+            this.validateVariableUsageBetweenClauses(rule, diagnostics);
         }
     }
 
@@ -603,12 +616,10 @@ export class DroolsDiagnosticProvider {
     }
 
     /**
-     * Validate conditions within when clauses - fixed false positives
+     * Validate conditions within when clauses - enhanced to catch syntax errors
      */
     private validateConditions(whenClause: WhenNode, diagnostics: Diagnostic[]): void {
         for (const condition of whenClause.conditions) {
-            // Only validate truly problematic conditions, not style preferences
-            
             // Check for empty eval conditions (actual error)
             if (condition.conditionType === 'eval' && (!condition.content || condition.content.trim() === '')) {
                 diagnostics.push({
@@ -622,10 +633,333 @@ export class DroolsDiagnosticProvider {
                 });
             }
 
-            // Removed overly strict validations that cause false positives:
-            // - Variable name format validation (too strict)
-            // - Fact type requirement (not always needed)
-            // These validations were causing false positives for valid Drools code
+            // Validate condition content for syntax errors
+            if (condition.content) {
+                this.validateConditionSyntax(condition, diagnostics);
+            }
+        }
+    }
+
+    /**
+     * Validate then clause for Java syntax errors
+     */
+    private validateThenClause(thenClause: ThenNode, diagnostics: Diagnostic[]): void {
+        if (!thenClause.actions || thenClause.actions.trim() === '') {
+            return; // Empty then clause is already handled elsewhere
+        }
+
+        const actions = thenClause.actions.trim();
+        
+        // Validate Java syntax in RHS
+        this.validateJavaSyntaxInRHS(actions, thenClause, diagnostics);
+        
+        // Check for missing semicolons in Java statements
+        this.validateSemicolonsInRHS(actions, thenClause, diagnostics);
+        
+        // Check for invalid Drools syntax in RHS (should be Java)
+        this.validateNoInvalidDroolsSyntaxInRHS(actions, thenClause, diagnostics);
+    }
+
+    /**
+     * Validate Java syntax in RHS
+     */
+    private validateJavaSyntaxInRHS(actions: string, thenClause: ThenNode, diagnostics: Diagnostic[]): void {
+        // Check for invalid bare words that should be proper Java statements
+        const lines = actions.split('\n');
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (line === '') continue;
+            
+            // Check for bare words like "actions" that aren't valid Java
+            if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(line)) {
+                diagnostics.push({
+                    severity: DiagnosticSeverity.Error,
+                    range: {
+                        start: { line: thenClause.range.start.line + i, character: 0 },
+                        end: { line: thenClause.range.start.line + i, character: line.length }
+                    },
+                    message: `Invalid Java syntax: "${line}". RHS must contain valid Java statements.`,
+                    source: 'drools-semantic'
+                });
+            }
+        }
+    }
+
+    /**
+     * Validate semicolons in RHS Java statements
+     */
+    private validateSemicolonsInRHS(actions: string, thenClause: ThenNode, diagnostics: Diagnostic[]): void {
+        const lines = actions.split('\n');
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (line === '') continue;
+            
+            // Skip comments and control structures
+            if (line.startsWith('//') || line.startsWith('/*') || 
+                line.startsWith('if') || line.startsWith('for') || line.startsWith('while') ||
+                line.endsWith('{') || line === '}') {
+                continue;
+            }
+            
+            // Check if line looks like a Java statement but missing semicolon
+            if (this.looksLikeJavaStatement(line) && !line.endsWith(';')) {
+                diagnostics.push({
+                    severity: DiagnosticSeverity.Error,
+                    range: {
+                        start: { line: thenClause.range.start.line + i, character: 0 },
+                        end: { line: thenClause.range.start.line + i, character: line.length }
+                    },
+                    message: `Missing semicolon. Java statements in RHS must end with semicolon: "${line}"`,
+                    source: 'drools-semantic'
+                });
+            }
+        }
+    }
+
+    /**
+     * Check if a line looks like a Java statement that should end with semicolon
+     */
+    private looksLikeJavaStatement(line: string): boolean {
+        // Method calls, assignments, variable declarations, etc.
+        return /^[a-zA-Z_$][a-zA-Z0-9_$]*\s*[\.\(]/.test(line) ||  // Method calls like System.out.println
+               /^[a-zA-Z_$][a-zA-Z0-9_$]*\s*=/.test(line) ||        // Assignments
+               /^\$[a-zA-Z_][a-zA-Z0-9_]*\./.test(line) ||          // Variable method calls
+               /^(int|String|boolean|double|float|long)\s+/.test(line); // Variable declarations
+    }
+
+    /**
+     * Check for invalid Drools syntax in RHS
+     */
+    private validateNoInvalidDroolsSyntaxInRHS(actions: string, thenClause: ThenNode, diagnostics: Diagnostic[]): void {
+        // Check for Drools operators that shouldn't be in RHS
+        const droolsOperators = ['matches', 'contains', 'memberOf', 'soundslike'];
+        
+        for (const operator of droolsOperators) {
+            if (actions.includes(operator)) {
+                diagnostics.push({
+                    severity: DiagnosticSeverity.Error,
+                    range: {
+                        start: { line: thenClause.range.start.line, character: 0 },
+                        end: { line: thenClause.range.end.line, character: 0 }
+                    },
+                    message: `Drools operator "${operator}" is not valid in RHS. Use Java methods instead.`,
+                    source: 'drools-semantic'
+                });
+            }
+        }
+    }
+
+    /**
+     * Find the specific position of a variable in the then clause
+     */
+    private findVariablePositionInThenClause(thenClause: ThenNode, variableName: string): Range | null {
+        if (!thenClause.actions) return null;
+        
+        const thenLines = thenClause.actions.split('\n');
+        const thenStartLine = thenClause.range.start.line;
+        
+        for (let i = 0; i < thenLines.length; i++) {
+            const line = thenLines[i];
+            const variableIndex = line.indexOf(variableName);
+            
+            if (variableIndex !== -1) {
+                // Found the variable, calculate precise position
+                const lineNumber = thenStartLine + i + 1; // +1 because then clause starts after "then" keyword
+                return {
+                    start: { line: lineNumber, character: variableIndex },
+                    end: { line: lineNumber, character: variableIndex + variableName.length }
+                };
+            }
+        }
+        
+        return null;
+    }
+
+    /**
+     * Validate syntax within condition content
+     */
+    private validateConditionSyntax(condition: ConditionNode, diagnostics: Diagnostic[]): void {
+        const content = condition.content.trim();
+        
+        // Check for malformed variable declarations with spaces
+        const malformedVariablePattern = /\$[a-zA-Z_][a-zA-Z0-9_]*\s+[a-zA-Z_][a-zA-Z0-9_]*\s*:/g;
+        let match;
+        while ((match = malformedVariablePattern.exec(content)) !== null) {
+            diagnostics.push({
+                severity: DiagnosticSeverity.Error,
+                range: {
+                    start: { line: condition.range.start.line, character: condition.range.start.character },
+                    end: { line: condition.range.end.line, character: condition.range.end.character }
+                },
+                message: 'Variable names cannot contain spaces. Use camelCase or underscores instead.',
+                source: 'drools-semantic'
+            });
+        }
+
+        // Check for malformed fact type names with spaces
+        const malformedFactTypePattern = /:\s*[A-Z][a-zA-Z0-9_]*\s+[a-zA-Z0-9_]+\s*\(/g;
+        while ((match = malformedFactTypePattern.exec(content)) !== null) {
+            diagnostics.push({
+                severity: DiagnosticSeverity.Error,
+                range: {
+                    start: { line: condition.range.start.line, character: condition.range.start.character },
+                    end: { line: condition.range.end.line, character: condition.range.end.character }
+                },
+                message: 'Fact type names cannot contain spaces. Use camelCase instead.',
+                source: 'drools-semantic'
+            });
+        }
+
+        // Check for invalid variable name patterns (starting with numbers, containing invalid chars)
+        const invalidVariablePattern = /\$[0-9][a-zA-Z0-9_]*|[\$][a-zA-Z_][a-zA-Z0-9_]*[^a-zA-Z0-9_\s:]/g;
+        while ((match = invalidVariablePattern.exec(content)) !== null) {
+            const varName = match[0];
+            if (varName.match(/\$[0-9]/)) {
+                diagnostics.push({
+                    severity: DiagnosticSeverity.Error,
+                    range: {
+                        start: { line: condition.range.start.line, character: condition.range.start.character },
+                        end: { line: condition.range.end.line, character: condition.range.end.character }
+                    },
+                    message: `Variable name "${varName}" cannot start with a number.`,
+                    source: 'drools-semantic'
+                });
+            }
+        }
+
+        // Check for missing colons in variable declarations
+        const missingColonPattern = /\$[a-zA-Z_][a-zA-Z0-9_]*\s+[A-Z][a-zA-Z0-9_]*\s*\(/g;
+        while ((match = missingColonPattern.exec(content)) !== null) {
+            diagnostics.push({
+                severity: DiagnosticSeverity.Error,
+                range: {
+                    start: { line: condition.range.start.line, character: condition.range.start.character },
+                    end: { line: condition.range.end.line, character: condition.range.end.character }
+                },
+                message: 'Missing colon (:) in variable declaration. Use format: $variable : FactType()',
+                source: 'drools-semantic'
+            });
+        }
+
+        // Check for invalid bare words in LHS (should be proper Drools patterns)
+        if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(content.trim())) {
+            diagnostics.push({
+                severity: DiagnosticSeverity.Error,
+                range: {
+                    start: { line: condition.range.start.line, character: condition.range.start.character },
+                    end: { line: condition.range.end.line, character: condition.range.end.character }
+                },
+                message: `Invalid condition syntax: "${content.trim()}". LHS must contain proper Drools pattern syntax like: $variable : FactType() or eval(...).`,
+                source: 'drools-semantic'
+            });
+        }
+
+        // Check for missing proper pattern structure
+        if (content.trim() && !content.includes(':') && !content.includes('eval(') && 
+            !content.includes('exists(') && !content.includes('not(') && 
+            !content.includes('forall(') && !content.includes('collect(') && 
+            !content.includes('accumulate(')) {
+            
+            // Only flag if it's not already flagged as a bare word
+            if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(content.trim())) {
+                diagnostics.push({
+                    severity: DiagnosticSeverity.Warning,
+                    range: {
+                        start: { line: condition.range.start.line, character: condition.range.start.character },
+                        end: { line: condition.range.end.line, character: condition.range.end.character }
+                    },
+                    message: 'Condition may be missing proper Drools pattern syntax. Expected: $variable : FactType() or Drools keywords.',
+                    source: 'drools-semantic'
+                });
+            }
+        }
+
+        // Check for double colon syntax error (:: should be :)
+        const doubleColonPattern = /\$[a-zA-Z_][a-zA-Z0-9_]*\s*::\s*/g;
+        while ((match = doubleColonPattern.exec(content)) !== null) {
+            diagnostics.push({
+                severity: DiagnosticSeverity.Error,
+                range: {
+                    start: { line: condition.range.start.line, character: condition.range.start.character },
+                    end: { line: condition.range.end.line, character: condition.range.end.character }
+                },
+                message: 'Invalid double colon (::) in variable declaration. Use single colon (:) instead. Correct format: $variable : FactType()',
+                source: 'drools-semantic'
+            });
+        }
+    }
+
+    /**
+     * Validate variable usage between LHS (when) and RHS (then) clauses
+     */
+    private validateVariableUsageBetweenClauses(rule: RuleNode, diagnostics: Diagnostic[]): void {
+        if (!rule.when || !rule.then) {
+            return; // Can't validate if either clause is missing
+        }
+
+        // Extract variables declared in LHS (when clause)
+        const declaredVariables = new Set<string>();
+        
+        // Get variables from parsed conditions
+        for (const condition of rule.when.conditions) {
+            if (condition.variable) {
+                declaredVariables.add(condition.variable);
+            }
+            
+            // Also extract variables from condition content using regex
+            if (condition.content) {
+                const variableMatches = condition.content.match(/\$[a-zA-Z_][a-zA-Z0-9_]*(?=\s*:)/g);
+                if (variableMatches) {
+                    for (const variable of variableMatches) {
+                        declaredVariables.add(variable);
+                    }
+                }
+            }
+        }
+
+        // Extract variables used in RHS (then clause)
+        const usedVariables = new Set<string>();
+        if (rule.then.actions) {
+            const variableMatches = rule.then.actions.match(/\$[a-zA-Z_][a-zA-Z0-9_]*/g);
+            if (variableMatches) {
+                for (const variable of variableMatches) {
+                    usedVariables.add(variable);
+                }
+            }
+        }
+
+        // Check for undefined variables (used in RHS but not declared in LHS)
+        for (const usedVariable of usedVariables) {
+            if (!declaredVariables.has(usedVariable)) {
+                // Find the specific position of the undefined variable in the then clause
+                const variablePosition = this.findVariablePositionInThenClause(rule.then, usedVariable);
+                
+                diagnostics.push({
+                    severity: DiagnosticSeverity.Error,
+                    range: variablePosition || {
+                        start: { line: rule.then.range.start.line, character: rule.then.range.start.character },
+                        end: { line: rule.then.range.end.line, character: rule.then.range.end.character }
+                    },
+                    message: `Undefined variable: ${usedVariable}. Variable must be declared in the when clause before being used in the then clause.`,
+                    source: 'drools-semantic'
+                });
+            }
+        }
+
+        // Optional: Check for unused variables (declared in LHS but not used in RHS)
+        // This is a warning, not an error, as variables might be used for pattern matching only
+        for (const declaredVariable of declaredVariables) {
+            if (!usedVariables.has(declaredVariable)) {
+                diagnostics.push({
+                    severity: DiagnosticSeverity.Information,
+                    range: {
+                        start: { line: rule.when.range.start.line, character: rule.when.range.start.character },
+                        end: { line: rule.when.range.end.line, character: rule.when.range.end.character }
+                    },
+                    message: `Variable ${declaredVariable} is declared but never used in the then clause.`,
+                    source: 'drools-semantic'
+                });
+            }
         }
     }
 
