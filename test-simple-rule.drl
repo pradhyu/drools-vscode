@@ -1,8 +1,0 @@
-rule "ExampleOfBackwardChainingRules"
-dialect "java"
-when
-    $m : Message( status == Message.GOODBYE, message : message )
-then
-    System.out.println( message );
-    System.out.println( $m );
-end

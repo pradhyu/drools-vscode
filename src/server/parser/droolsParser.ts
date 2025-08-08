@@ -559,6 +559,94 @@ export class DroolsParser {
     }
 
     /**
+     * Check if a line is a comment or should be skipped
+     */
+    private shouldSkipLine(line: string): boolean {
+        const trimmed = line.trim();
+        
+        // Skip empty lines
+        if (trimmed === '') {
+            return true;
+        }
+        
+        // Skip single-line comments (lines that start with //)
+        if (trimmed.startsWith('//')) {
+            return true;
+        }
+        
+        // Skip multi-line comment lines (but be more careful)
+        // Only skip if the line ONLY contains comment content
+        if (trimmed.startsWith('/*') && trimmed.endsWith('*/')) {
+            // This is a complete multi-line comment on one line
+            return true;
+        }
+        
+        if (trimmed.startsWith('/*') && !trimmed.includes('*/')) {
+            // This is the start of a multi-line comment
+            return true;
+        }
+        
+        if (trimmed.startsWith('*') && !trimmed.includes('*/')) {
+            // This is a continuation of a multi-line comment
+            return true;
+        }
+        
+        if (trimmed.endsWith('*/') && !trimmed.includes('/*')) {
+            // This is the end of a multi-line comment
+            return true;
+        }
+        
+        return false;
+    }
+
+    /**
+     * Remove comments from a line while preserving string literals
+     */
+    private removeCommentsFromLine(line: string): string {
+        let result = '';
+        let inString = false;
+        let stringChar = '';
+        let i = 0;
+        
+        while (i < line.length) {
+            const char = line[i];
+            const nextChar = i + 1 < line.length ? line[i + 1] : '';
+            
+            // Handle string literals
+            if (!inString && (char === '"' || char === "'")) {
+                inString = true;
+                stringChar = char;
+                result += char;
+            } else if (inString && char === stringChar && (i === 0 || line[i - 1] !== '\\')) {
+                inString = false;
+                stringChar = '';
+                result += char;
+            } else if (inString) {
+                result += char;
+            } else if (char === '/' && nextChar === '/') {
+                // Single-line comment - stop processing this line
+                break;
+            } else if (char === '/' && nextChar === '*') {
+                // Multi-line comment start - skip until */
+                i += 2;
+                while (i + 1 < line.length) {
+                    if (line[i] === '*' && line[i + 1] === '/') {
+                        i += 2;
+                        break;
+                    }
+                    i++;
+                }
+                continue;
+            } else {
+                result += char;
+            }
+            i++;
+        }
+        
+        return result;
+    }
+
+    /**
      * Parse the entire DRL file
      * ANTLR Grammar Reference: Follows top-level file structure rules
      */
@@ -580,26 +668,40 @@ export class DroolsParser {
 
         // Simple parsing implementation - in a real implementation, this would be more sophisticated
         while (this.currentLine < this.lines.length) {
-            const line = this.lines[this.currentLine].trim();
+            const line = this.lines[this.currentLine];
             
-            if (line.startsWith('package ')) {
-                ast.packageDeclaration = this.parsePackage();
-            } else if (line.startsWith('import ')) {
-                ast.imports.push(this.parseImport());
-            } else if (line.startsWith('global ')) {
-                ast.globals.push(this.parseGlobal());
-            } else if (line.startsWith('function ')) {
-                ast.functions.push(this.parseFunction());
-            } else if (line.startsWith('rule ')) {
-                ast.rules.push(this.parseRule());
-            } else if (line.startsWith('query ')) {
-                ast.queries.push(this.parseQuery());
-            } else if (line.startsWith('declare ')) {
-                ast.declares.push(this.parseDeclare());
-            } else if (line.trim() !== '') {
-                // Skip empty lines and comments
+            // Skip comments and empty lines
+            if (this.shouldSkipLine(line)) {
                 this.currentLine++;
+                continue;
+            }
+            
+            // Remove inline comments from the line while preserving string literals
+            const cleanLine = this.removeCommentsFromLine(line).trim();
+            
+            // Skip if line becomes empty after comment removal
+            if (cleanLine === '') {
+                this.currentLine++;
+                continue;
+            }
+            
+            if (cleanLine.startsWith('package ')) {
+                ast.packageDeclaration = this.parsePackage();
+            } else if (cleanLine.startsWith('import ')) {
+                ast.imports.push(this.parseImport());
+            } else if (cleanLine.startsWith('global ')) {
+                ast.globals.push(this.parseGlobal());
+            } else if (cleanLine.startsWith('function ')) {
+                ast.functions.push(this.parseFunction());
+            } else if (cleanLine.startsWith('rule ')) {
+                ast.rules.push(this.parseRule());
+            } else if (cleanLine.startsWith('query ')) {
+                ast.queries.push(this.parseQuery());
+            } else if (cleanLine.startsWith('declare ')) {
+                ast.declares.push(this.parseDeclare());
             } else {
+                // Unknown content - skip with warning
+                this.addError(`Unknown content: ${cleanLine}`, this.getCurrentPosition(), 'warning');
                 this.currentLine++;
             }
         }
@@ -660,7 +762,8 @@ export class DroolsParser {
      */
     private parsePackage(): PackageNode {
         const line = this.lines[this.currentLine];
-        const match = line.match(/package\s+([^;]+);?/);
+        const cleanLine = this.removeCommentsFromLine(line);
+        const match = cleanLine.match(/package\s+([^;]+);?/);
         const packageName = match ? match[1].trim() : '';
         
         const node: PackageNode = {
@@ -681,7 +784,8 @@ export class DroolsParser {
      */
     private parseImport(): ImportNode {
         const line = this.lines[this.currentLine];
-        const match = line.match(/import\s+([^;]+);?/);
+        const cleanLine = this.removeCommentsFromLine(line);
+        const match = cleanLine.match(/import\s+([^;]+);?/);
         const importPath = match ? match[1].trim() : '';
         
         const node: ImportNode = {
@@ -702,9 +806,10 @@ export class DroolsParser {
      */
     private parseGlobal(): GlobalNode {
         const line = this.lines[this.currentLine];
-        const match = line.match(/global\s+(\S+)\s+(\S+);?/);
+        const cleanLine = this.removeCommentsFromLine(line);
+        const match = cleanLine.match(/global\s+(\S+)\s+([^;]+);?/);
         const dataType = match ? match[1] : '';
-        const name = match ? match[2] : '';
+        const name = match ? match[2].trim() : '';
         
         const node: GlobalNode = {
             type: 'Global',
@@ -802,19 +907,39 @@ export class DroolsParser {
     private parseRule(): RuleNode {
         const startLine = this.currentLine;
         const line = this.lines[this.currentLine];
-        const match = line.match(/rule\s+"([^"]+)"/);
-        const ruleName = match ? match[1] : '';
+        const cleanLine = this.removeCommentsFromLine(line);
+        
+        // Try quoted rule name first, then unquoted
+        let match = cleanLine.match(/rule\s+"([^"]+)"/);
+        let ruleName = match ? match[1] : '';
+        
+        if (!ruleName) {
+            // Try unquoted rule name
+            match = cleanLine.match(/rule\s+([^\s]+)/);
+            ruleName = match ? match[1] : '';
+        }
         
         this.currentLine++;
         
         // Parse rule attributes
         const attributes: RuleAttributeNode[] = [];
         while (this.currentLine < this.lines.length) {
-            const attrLine = this.lines[this.currentLine].trim();
-            if (attrLine === 'when') {break;}
-            if (attrLine && !attrLine.startsWith('//')) {
+            const line = this.lines[this.currentLine];
+            const attrLine = line.trim();
+            if (attrLine === 'when' || attrLine === 'then') {break;}
+            
+            // Skip comment-only lines
+            if (this.shouldSkipLine(line)) {
+                this.currentLine++;
+                continue;
+            }
+            
+            // Remove comments from attribute line
+            const cleanAttrLine = this.removeCommentsFromLine(line).trim();
+            
+            if (cleanAttrLine) {
                 // Simple attribute parsing - include hyphens for attributes like no-loop, lock-on-active
-                const attrMatch = attrLine.match(/([a-zA-Z-]+)\s*(.*)$/);
+                const attrMatch = cleanAttrLine.match(/([a-zA-Z-]+)\s*(.*)$/);
                 if (attrMatch) {
                     attributes.push({
                         type: 'RuleAttribute',
@@ -822,7 +947,7 @@ export class DroolsParser {
                         value: attrMatch[2].replace(/[;,]$/, ''),
                         range: {
                             start: { line: this.currentLine, character: 0 },
-                            end: { line: this.currentLine, character: attrLine.length }
+                            end: { line: this.currentLine, character: cleanAttrLine.length }
                         }
                     });
                 }
@@ -830,13 +955,13 @@ export class DroolsParser {
             this.currentLine++;
         }
         
-        // Parse when clause
+        // Parse when clause (optional)
         let whenClause: WhenNode | undefined;
         if (this.currentLine < this.lines.length && this.lines[this.currentLine].trim() === 'when') {
             whenClause = this.parseWhenClause();
         }
         
-        // Parse then clause
+        // Parse then clause (optional)
         let thenClause: ThenNode | undefined;
         if (this.currentLine < this.lines.length && this.lines[this.currentLine].trim() === 'then') {
             thenClause = this.parseThenClause();
@@ -990,10 +1115,20 @@ export class DroolsParser {
         
         let content = '';
         while (this.currentLine < this.lines.length) {
-            const line = this.lines[this.currentLine].trim();
-            if (line === 'end') {break;}
+            const line = this.lines[this.currentLine];
+            const trimmedLine = line.trim();
+            if (trimmedLine === 'end') {break;}
             
-            content += this.lines[this.currentLine] + '\n';
+            // Skip comment-only lines
+            if (this.shouldSkipLine(line)) {
+                this.currentLine++;
+                continue;
+            }
+            
+            // Remove inline comments from the line
+            const cleanLine = this.removeCommentsFromLine(line);
+            // Always add the line (even if empty after comment removal) to preserve structure
+            content += cleanLine + '\n';
             this.currentLine++;
         }
         
@@ -1011,16 +1146,19 @@ export class DroolsParser {
      * Parse condition from content string
      */
     private parseConditionFromContent(content: string, startLine: number): ConditionNode {
+        // Remove comments from condition content
+        const cleanContent = this.removeCommentsFromLine(content);
+        
         const startPos: Position = { line: startLine, character: 0 };
-        const endPos: Position = { line: startLine, character: content.length };
+        const endPos: Position = { line: startLine, character: cleanContent.length };
         
         // Detect condition type
-        const conditionType = this.detectConditionType(content);
+        const conditionType = this.detectConditionType(cleanContent);
         
         // Extract variable, fact type, and constraints
-        const { variable, factType, constraints } = this.parseConditionComponents(content);
+        const { variable, factType, constraints } = this.parseConditionComponents(cleanContent);
         
-        // Check if this is a multi-line pattern
+        // Check if this is a multi-line pattern (use original content for multi-line detection)
         const isMultiLine = content.includes('\n') || this.detectMultiLinePattern(content, startPos) !== null;
         
         let multiLinePattern: MultiLinePatternNode | undefined;
@@ -1038,7 +1176,7 @@ export class DroolsParser {
         return {
             type: nodeType as any,
             conditionType,
-            content: content.trim(),
+            content: cleanContent.trim(),
             variable,
             factType,
             constraints,
@@ -1559,12 +1697,15 @@ export class DroolsParser {
             character: parentMetadata.startColumn + index * 10 + content.length 
         };
         
+        // Remove comments from condition content
+        const cleanContent = this.removeCommentsFromLine(content);
+        
         // Detect condition type and extract components
-        const conditionType = this.detectConditionType(content);
-        const { variable, factType, constraints } = this.parseConditionComponents(content);
+        const conditionType = this.detectConditionType(cleanContent);
+        const { variable, factType, constraints } = this.parseConditionComponents(cleanContent);
         
         // Check if this condition itself contains nested multi-line patterns
-        // Only if we haven't exceeded depth limit
+        // Only if we haven't exceeded depth limit (use original content for multi-line detection)
         const nestedPattern = depth < 5 ? this.detectMultiLinePattern(content, startPos) : null;
         let multiLinePattern: MultiLinePatternNode | undefined;
         
@@ -1578,7 +1719,7 @@ export class DroolsParser {
         return {
             type: nodeType as any,
             conditionType,
-            content: content.trim(),
+            content: cleanContent.trim(),
             variable,
             factType,
             constraints,
