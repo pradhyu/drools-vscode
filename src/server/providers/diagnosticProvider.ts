@@ -750,6 +750,28 @@ export class DroolsDiagnosticProvider {
     }
 
     /**
+     * Check if rule name contains truly invalid characters
+     * For quoted rule names, Drools allows most characters except unescaped quotes
+     */
+    private hasInvalidRuleNameCharacters(ruleName: string): boolean {
+        // Check for empty rule name
+        if (!ruleName || ruleName.trim() === '') {
+            return true;
+        }
+        
+        // Check for unescaped quotes (which would break parsing)
+        // This is the main restriction for quoted rule names
+        if (ruleName.includes('"') && !ruleName.includes('\\"')) {
+            return true;
+        }
+        
+        // For quoted rule names, Drools is very lenient
+        // Allow most characters including special symbols, Unicode, etc.
+        // Only restrict truly problematic characters that would break parsing
+        return false;
+    }
+
+    /**
      * Find the specific position of a variable in the then clause
      */
     private findVariablePositionInThenClause(thenClause: ThenNode, variableName: string): Range | null {
@@ -1469,8 +1491,10 @@ export class DroolsDiagnosticProvider {
      */
     private validateRuleNames(ast: DroolsAST, diagnostics: Diagnostic[]): void {
         for (const rule of ast.rules) {
-            // Check if rule name contains only valid characters
-            if (rule.name && !/^[a-zA-Z0-9\s_-]+$/.test(rule.name)) {
+            // Check if rule name contains truly invalid characters
+            // For quoted rule names, Drools allows most characters except unescaped quotes
+            // Only flag truly problematic characters
+            if (rule.name && this.hasInvalidRuleNameCharacters(rule.name)) {
                 diagnostics.push({
                     severity: DiagnosticSeverity.Warning,
                     range: {
@@ -1983,15 +2007,21 @@ export class DroolsDiagnosticProvider {
      */
     private validateMultiLinePatternSyntax(condition: ConditionNode, diagnostics: Diagnostic[]): void {
         const validPatternTypes = ['exists', 'not', 'eval', 'forall', 'collect', 'accumulate'];
+        const validBasicPatternTypes = ['pattern', 'constraint']; // Basic Drools patterns
         
-        if (condition.conditionType && !validPatternTypes.includes(condition.conditionType)) {
+        // Only validate if this is actually a multi-line pattern
+        // Basic patterns like "$var : Type()" should not be restricted
+        if (condition.conditionType && 
+            !validPatternTypes.includes(condition.conditionType) && 
+            !validBasicPatternTypes.includes(condition.conditionType)) {
+            
             diagnostics.push({
                 severity: DiagnosticSeverity.Error,
                 range: {
                     start: { line: condition.range.start.line, character: condition.range.start.character },
                     end: { line: condition.range.end.line, character: condition.range.end.character }
                 },
-                message: `Invalid pattern type: "${condition.conditionType}". Valid types are: ${validPatternTypes.join(', ')}`,
+                message: `Invalid pattern type: "${condition.conditionType}". Valid types are: ${[...validPatternTypes, ...validBasicPatternTypes].join(', ')}`,
                 source: 'drools-syntax'
             });
         }
