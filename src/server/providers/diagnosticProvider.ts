@@ -1141,14 +1141,19 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
         
         for (let i = 0; i < thenLines.length; i++) {
             const line = thenLines[i];
-            const variableIndex = line.indexOf(variableName);
             
-            if (variableIndex !== -1) {
+            // Use regex to find the exact variable position, ensuring it's a complete variable name
+            const variableRegex = new RegExp('\\' + variableName + '(?![a-zA-Z0-9_])', 'g');
+            const match = variableRegex.exec(line);
+            
+            if (match) {
                 // Found the variable, calculate precise position
                 const lineNumber = thenStartLine + i + 1; // +1 because then clause starts after "then" keyword
+                const variableStartChar = match.index;
+                
                 return {
-                    start: { line: lineNumber, character: variableIndex },
-                    end: { line: lineNumber, character: variableIndex + variableName.length }
+                    start: { line: lineNumber, character: variableStartChar },
+                    end: { line: lineNumber, character: variableStartChar + variableName.length }
                 };
             }
         }
@@ -1369,7 +1374,8 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
                             end: { line: rule.then.range.end.line, character: rule.then.range.end.character }
                         },
                         message: `Undefined variable: ${usedVariable} is used but not declared in the when clause.`,
-                        source: 'drools-semantic'
+                        source: 'drools-semantic',
+                        code: 'undefined-variable' // Helps with error categorization and gutter icons
                     });
                 }
             }
@@ -1379,14 +1385,18 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
         // This is a warning, not an error, as variables might be used for pattern matching only
         for (const declaredVariable of declaredVariables) {
             if (!usedVariables.has(declaredVariable)) {
+                // Find the precise position of the unused variable declaration
+                const variablePosition = this.findVariableDeclarationPosition(rule.when, declaredVariable);
+                
                 diagnostics.push({
                     severity: DiagnosticSeverity.Information,
-                    range: {
+                    range: variablePosition || {
                         start: { line: rule.when.range.start.line, character: rule.when.range.start.character },
                         end: { line: rule.when.range.end.line, character: rule.when.range.end.character }
                     },
                     message: `Variable ${declaredVariable} is declared but never used in the then clause.`,
-                    source: 'drools-semantic'
+                    source: 'drools-semantic',
+                    tags: [1] // DiagnosticTag.Unnecessary - shows as faded/grayed out
                 });
             }
         }
@@ -3013,5 +3023,36 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
         }
 
         return deduplicated;
+    }
+
+    /**
+     * Find the precise position where a variable is declared in the when clause
+     */
+    private findVariableDeclarationPosition(whenClause: WhenNode, variableName: string): Range | null {
+        if (!whenClause.conditions) return null;
+        
+        for (const condition of whenClause.conditions) {
+            if (condition.variable === variableName) {
+                // Found the condition where this variable is declared
+                // Search directly in the document lines for precise positioning
+                const conditionStartLine = condition.range.start.line;
+                
+                if (conditionStartLine < this.documentLines.length) {
+                    const lineContent = this.documentLines[conditionStartLine];
+                    
+                    // Find the variable in this line
+                    const variableIndex = lineContent.indexOf(variableName);
+                    
+                    if (variableIndex !== -1) {
+                        return {
+                            start: { line: conditionStartLine, character: variableIndex },
+                            end: { line: conditionStartLine, character: variableIndex + variableName.length }
+                        };
+                    }
+                }
+            }
+        }
+        
+        return null;
     }
 }
