@@ -7,16 +7,9 @@ import { Diagnostic, DiagnosticSeverity } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { DroolsAST, AnyASTNode, RuleNode, FunctionNode, ConditionNode, WhenNode, ThenNode, MultiLinePatternNode, MultiLinePatternMetadata, ParenthesesTracker, Position, Range } from '../parser/ast';
 import { ParseError } from '../parser/droolsParser';
+import { ValidationMetricsCollector, ValidationType, ValidationMetrics, ValidationPhaseMetrics, PerformanceBenchmark } from '../performance/validationMetrics';
 
-/**
- * Validation types for coordinating different validation phases
- */
-enum ValidationType {
-    SYNTAX = 'syntax',
-    SEMANTIC = 'semantic',
-    BEST_PRACTICE = 'best-practice',
-    MULTILINE_PATTERNS = 'multiline-patterns'
-}
+
 
 /**
  * Manages validation state to prevent duplicate validation runs
@@ -212,6 +205,7 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
     private documentLines!: string[];
     private validationState: ValidationState = new ValidationState();
     private ruleNameValidator: RuleNameValidator = new EnhancedRuleNameValidator();
+    private metricsCollector: ValidationMetricsCollector = new ValidationMetricsCollector();
 
     constructor(settings: DiagnosticSettings) {
         this.settings = settings;
@@ -251,6 +245,19 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
         // Coordinate all validation types to prevent duplication
         this.coordinateValidation(ast, diagnostics);
 
+        // Finalize performance metrics
+        const finalMetrics = this.metricsCollector.finalizeMetrics();
+        
+        // Add performance benchmark for this validation
+        const fileSize = document.getText().length;
+        const ruleCount = ast.rules.length;
+        this.metricsCollector.addBenchmark(fileSize, ruleCount);
+        
+        // Check for performance issues (optional logging)
+        if (this.metricsCollector.isPerformanceDegraded(fileSize, ruleCount)) {
+            console.warn('Validation performance degraded:', this.metricsCollector.generatePerformanceReport());
+        }
+
         // Limit the number of diagnostics
         return diagnostics.slice(0, this.settings.maxNumberOfProblems);
     }
@@ -259,28 +266,59 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
      * Coordinate validation execution to prevent duplication
      */
     public coordinateValidation(ast: DroolsAST, diagnostics: Diagnostic[]): void {
+        // Reset metrics for new validation cycle
+        this.metricsCollector.resetMetrics();
+
         // Syntax validation (includes keywords and syntax details)
         if (this.settings.enableSyntaxValidation && !this.validationState.isComplete(ValidationType.SYNTAX)) {
+            this.metricsCollector.startPhase(ValidationType.SYNTAX);
+            const initialDiagnosticCount = diagnostics.length;
+            
             this.validateDroolsKeywords(diagnostics);
             this.validateSyntaxDetails(ast, diagnostics);
+            
+            const errorsFound = diagnostics.slice(initialDiagnosticCount).filter(d => d.severity === 1).length;
+            const warningsFound = diagnostics.slice(initialDiagnosticCount).filter(d => d.severity === 2).length;
+            this.metricsCollector.endPhase(ValidationType.SYNTAX, errorsFound, warningsFound);
             this.validationState.markComplete(ValidationType.SYNTAX);
         }
 
         // Semantic validation - ONLY ONCE
         if (this.settings.enableSemanticValidation && !this.validationState.isComplete(ValidationType.SEMANTIC)) {
+            this.metricsCollector.startPhase(ValidationType.SEMANTIC);
+            const initialDiagnosticCount = diagnostics.length;
+            
             this.validateSemantics(ast, diagnostics);
+            
+            const errorsFound = diagnostics.slice(initialDiagnosticCount).filter(d => d.severity === 1).length;
+            const warningsFound = diagnostics.slice(initialDiagnosticCount).filter(d => d.severity === 2).length;
+            this.metricsCollector.endPhase(ValidationType.SEMANTIC, errorsFound, warningsFound);
             this.validationState.markComplete(ValidationType.SEMANTIC);
         }
 
         // Best practice validation
         if (this.settings.enableBestPracticeWarnings && !this.validationState.isComplete(ValidationType.BEST_PRACTICE)) {
+            this.metricsCollector.startPhase(ValidationType.BEST_PRACTICE);
+            const initialDiagnosticCount = diagnostics.length;
+            
             this.validateBestPractices(ast, diagnostics);
+            
+            const errorsFound = diagnostics.slice(initialDiagnosticCount).filter(d => d.severity === 1).length;
+            const warningsFound = diagnostics.slice(initialDiagnosticCount).filter(d => d.severity === 2).length;
+            this.metricsCollector.endPhase(ValidationType.BEST_PRACTICE, errorsFound, warningsFound);
             this.validationState.markComplete(ValidationType.BEST_PRACTICE);
         }
 
         // Multi-line pattern validation
         if (this.settings.enableSyntaxValidation && !this.validationState.isComplete(ValidationType.MULTILINE_PATTERNS)) {
+            this.metricsCollector.startPhase(ValidationType.MULTILINE_PATTERNS);
+            const initialDiagnosticCount = diagnostics.length;
+            
             this.validateMultiLinePatterns(ast, diagnostics);
+            
+            const errorsFound = diagnostics.slice(initialDiagnosticCount).filter(d => d.severity === 1).length;
+            const warningsFound = diagnostics.slice(initialDiagnosticCount).filter(d => d.severity === 2).length;
+            this.metricsCollector.endPhase(ValidationType.MULTILINE_PATTERNS, errorsFound, warningsFound);
             this.validationState.markComplete(ValidationType.MULTILINE_PATTERNS);
         }
     }
@@ -460,7 +498,7 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
                 this.validateThenClause(rule.then, diagnostics);
             }
 
-            // Validate variable usage between LHS and RHS
+            // Validate variable usage between LHS and RHS (includes duplicate detection)
             this.validateVariableUsageBetweenClauses(rule, diagnostics);
         }
     }
@@ -730,6 +768,124 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
                 globalNames.add(global.name);
             }
         }
+    }
+
+    /**
+     * Validate for duplicate variable declarations within the same rule scope
+     * This addresses the specific issue mentioned where duplicate variables like:
+     * $condition : Condition( true || false )
+     * $condition : Condition()
+     * $condition : Condition()
+     * should be detected as errors
+     */
+    private validateDuplicateVariableDeclarations(rule: RuleNode, diagnostics: Diagnostic[]): void {
+        if (!rule.when || !rule.when.conditions) {
+            return;
+        }
+
+        // Track variable declarations with their positions
+        const variableDeclarations = new Map<string, Array<{condition: ConditionNode, position: Range}>>();
+        
+        // Collect all variable declarations from the when clause
+        this.collectVariableDeclarations(rule.when.conditions, variableDeclarations);
+        
+        // Check for duplicates
+        for (const [variableName, declarations] of variableDeclarations) {
+            if (declarations.length > 1) {
+                // Report error for each duplicate declaration (except the first one)
+                for (let i = 1; i < declarations.length; i++) {
+                    const duplicate = declarations[i];
+                    const firstDeclaration = declarations[0];
+                    
+                    diagnostics.push({
+                        severity: DiagnosticSeverity.Error,
+                        range: duplicate.position,
+                        message: `Duplicate variable declaration: "${variableName}". First declared at line ${firstDeclaration.position.start.line + 1}`,
+                        source: 'drools-semantic'
+                    });
+                }
+            }
+        }
+    }
+
+    /**
+     * Recursively collect variable declarations from conditions
+     */
+    private collectVariableDeclarations(
+        conditions: ConditionNode[], 
+        variableDeclarations: Map<string, Array<{condition: ConditionNode, position: Range}>>
+    ): void {
+        for (const condition of conditions) {
+            // Check if this condition declares a variable
+            if (condition.variable) {
+                const variableName = condition.variable;
+                if (!variableDeclarations.has(variableName)) {
+                    variableDeclarations.set(variableName, []);
+                }
+                variableDeclarations.get(variableName)!.push({
+                    condition: condition,
+                    position: condition.range
+                });
+            }
+            
+            // Also extract variables from condition content using regex
+            if (condition.content) {
+                const variableMatches = condition.content.match(/(\$[a-zA-Z_][a-zA-Z0-9_]*)\s*:/g);
+                if (variableMatches) {
+                    for (const match of variableMatches) {
+                        const variableName = match.replace(':', '').trim();
+                        if (!variableDeclarations.has(variableName)) {
+                            variableDeclarations.set(variableName, []);
+                        }
+                        
+                        // Try to find more precise position within the condition
+                        const variableIndex = condition.content.indexOf(match);
+                        const precisePosition = this.calculatePreciseVariablePosition(condition, variableIndex, variableName.length);
+                        
+                        variableDeclarations.get(variableName)!.push({
+                            condition: condition,
+                            position: precisePosition || condition.range
+                        });
+                    }
+                }
+            }
+            
+            // Recursively check nested conditions (for complex patterns like exists, forall, etc.)
+            if (condition.nestedConditions && condition.nestedConditions.length > 0) {
+                this.collectVariableDeclarations(condition.nestedConditions, variableDeclarations);
+            }
+            
+            // Check multi-line pattern inner conditions
+            if (condition.multiLinePattern && condition.multiLinePattern.innerConditions) {
+                this.collectVariableDeclarations(condition.multiLinePattern.innerConditions, variableDeclarations);
+            }
+        }
+    }
+
+    /**
+     * Calculate more precise position for variable within condition content
+     */
+    private calculatePreciseVariablePosition(condition: ConditionNode, variableIndex: number, variableLength: number): Range | null {
+        if (variableIndex === -1) return null;
+        
+        // Calculate which line within the condition contains the variable
+        const beforeVariable = condition.content.substring(0, variableIndex);
+        const lineBreaks = (beforeVariable.match(/\n/g) || []).length;
+        const lineNumber = condition.range.start.line + lineBreaks;
+        
+        // Find the character position within that line
+        const lines = condition.content.split('\n');
+        const lineWithVariable = lines[lineBreaks] || condition.content;
+        const charIndex = lineWithVariable.indexOf(condition.content.substring(variableIndex, variableIndex + variableLength));
+        
+        if (charIndex !== -1) {
+            return {
+                start: { line: lineNumber, character: charIndex },
+                end: { line: lineNumber, character: charIndex + variableLength }
+            };
+        }
+        
+        return null;
     }
 
     /**
@@ -1146,25 +1302,39 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
             return; // Can't validate if either clause is missing
         }
 
-        // Extract variables declared in LHS (when clause)
+        // Extract variables declared in LHS (when clause) and check for duplicates
         const declaredVariables = new Set<string>();
+        const variableDeclarations = new Map<string, ConditionNode[]>();
         
         // Get variables from parsed conditions
         for (const condition of rule.when.conditions) {
             if (condition.variable) {
                 declaredVariables.add(condition.variable);
-            }
-            
-            // Also extract variables from condition content using regex
-            if (condition.content) {
+                
+                // Track where each variable is declared for duplicate detection
+                if (!variableDeclarations.has(condition.variable)) {
+                    variableDeclarations.set(condition.variable, []);
+                }
+                variableDeclarations.get(condition.variable)!.push(condition);
+            } else if (condition.content) {
+                // Fallback: extract variables from condition content using regex if condition.variable is not available
                 const variableMatches = condition.content.match(/\$[a-zA-Z_][a-zA-Z0-9_]*(?=\s*:)/g);
                 if (variableMatches) {
                     for (const variable of variableMatches) {
                         declaredVariables.add(variable);
+                        
+                        // Track for duplicate detection
+                        if (!variableDeclarations.has(variable)) {
+                            variableDeclarations.set(variable, []);
+                        }
+                        variableDeclarations.get(variable)!.push(condition);
                     }
                 }
             }
         }
+        
+        // Check for duplicate variable declarations
+        this.checkForDuplicateVariables(variableDeclarations, diagnostics);
 
         // Extract variables used in RHS (then clause)
         const usedVariables = new Set<string>();
@@ -1178,31 +1348,24 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
         }
 
         // Check for undefined variables (used in RHS but not declared in LHS)
-        // But be more lenient for complex patterns like queries
         for (const usedVariable of usedVariables) {
             if (!declaredVariables.has(usedVariable)) {
-                // Check if this might be a query parameter or other valid context
-                const ruleContent = rule.when.conditions.map(c => c.content).join(' ');
-                const isQueryContext = ruleContent.includes('query') || 
-                                     ruleContent.includes('people over age') ||
-                                     ruleContent.includes(usedVariable.substring(1)); // Variable name without $
+                // Check if this might be a global variable, function parameter, or built-in
+                const isBuiltIn = ['drools', 'kcontext'].includes(usedVariable.replace('$', ''));
+                const isGlobal = usedVariable.match(/^[a-zA-Z][a-zA-Z0-9]*$/); // No $ prefix for globals
                 
-                // Also check if the variable might be a global or function parameter
-                const mightBeGlobalOrParam = usedVariable.length <= 3 || // Short variables like $p are often parameters
-                                           ruleContent.includes('from ') || // From clauses can introduce variables
-                                           ruleContent.includes('accumulate'); // Accumulate can introduce variables
-                
-                if (!isQueryContext && !mightBeGlobalOrParam) {
+                // Skip built-ins and globals
+                if (!isBuiltIn && !isGlobal && usedVariable.startsWith('$')) {
                     // Find the specific position of the undefined variable in the then clause
                     const variablePosition = this.findVariablePositionInThenClause(rule.then, usedVariable);
                     
                     diagnostics.push({
-                        severity: DiagnosticSeverity.Warning, // Changed to warning to be more lenient
+                        severity: DiagnosticSeverity.Error,
                         range: variablePosition || {
                             start: { line: rule.then.range.start.line, character: rule.then.range.start.character },
                             end: { line: rule.then.range.end.line, character: rule.then.range.end.character }
                         },
-                        message: `Variable ${usedVariable} may not be declared in the when clause. Check if it should be declared or is a parameter.`,
+                        message: `Undefined variable: ${usedVariable} is used but not declared in the when clause.`,
                         source: 'drools-semantic'
                     });
                 }
@@ -1801,7 +1964,7 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
     private validateMultiLinePattern(pattern: MultiLinePatternNode, diagnostics: Diagnostic[]): void {
         // Check if pattern is incomplete - but be more lenient for complex patterns
         // as they often have complex nested structures that the parser might not fully understand
-        const complexPatterns = ['accumulate', 'collect', 'from'];
+        const complexPatterns = ['accumulate', 'collect', 'from', 'not', 'exists', 'forall'];
         
         if (!pattern.isComplete && !complexPatterns.includes(pattern.keyword)) {
             diagnostics.push({
@@ -2710,4 +2873,121 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
         
         return false;
     }
-}
+
+    /**
+     * Check for duplicate variable declarations and report them
+     */
+    private checkForDuplicateVariables(variableDeclarations: Map<string, ConditionNode[]>, diagnostics: Diagnostic[]): void {
+        for (const [variableName, declarations] of variableDeclarations) {
+            if (declarations.length > 1) {
+                // Report duplicate declarations (skip the first one, report the rest)
+                for (let i = 1; i < declarations.length; i++) {
+                    const duplicateDeclaration = declarations[i];
+                    
+                    // Find the specific position of the variable in the condition
+                    const variablePosition = this.findVariablePositionInCondition(duplicateDeclaration, variableName);
+                    
+                    diagnostics.push({
+                        severity: DiagnosticSeverity.Error,
+                        range: variablePosition || {
+                            start: { line: duplicateDeclaration.range.start.line, character: duplicateDeclaration.range.start.character },
+                            end: { line: duplicateDeclaration.range.end.line, character: duplicateDeclaration.range.end.character }
+                        },
+                        message: `Duplicate variable declaration: ${variableName} is already declared. Each variable can only be declared once in the when clause.`,
+                        source: 'drools-semantic'
+                    });
+                }
+            }
+        }
+    }
+    
+    /**
+     * Find the specific position of a variable within a condition
+     */
+    private findVariablePositionInCondition(condition: ConditionNode, variableName: string): Range | null {
+        const content = condition.content;
+        const variableIndex = content.indexOf(variableName);
+        
+        if (variableIndex !== -1) {
+            const conditionStartLine = condition.range.start.line;
+            // Calculate which line within the condition contains the variable
+            const beforeVariable = content.substring(0, variableIndex);
+            const lineBreaks = (beforeVariable.match(/\n/g) || []).length;
+            const lineNumber = conditionStartLine + lineBreaks;
+            
+            // Find the character position within that line
+            const lines = content.split('\n');
+            const lineWithVariable = lines[lineBreaks] || content;
+            const charIndex = lineWithVariable.indexOf(variableName);
+            
+            return {
+                start: { line: lineNumber, character: charIndex },
+                end: { line: lineNumber, character: charIndex + variableName.length }
+            };
+        }
+        
+        return null;
+    }
+
+    /**
+     * Get current validation performance metrics
+     */
+    public getPerformanceMetrics(): ValidationMetrics {
+        return this.metricsCollector.finalizeMetrics();
+    }
+
+    /**
+     * Get detailed phase metrics for debugging
+     */
+    public getPhaseMetrics(): ValidationPhaseMetrics[] {
+        return this.metricsCollector.getPhaseMetrics();
+    }
+
+    /**
+     * Get performance benchmarks for analysis
+     */
+    public getPerformanceBenchmarks(): PerformanceBenchmark[] {
+        return this.metricsCollector.getBenchmarks();
+    }
+
+    /**
+     * Generate a performance report for debugging
+     */
+    public generatePerformanceReport(): string {
+        return this.metricsCollector.generatePerformanceReport();
+    }
+
+    /**
+     * Check if validation performance is acceptable
+     */
+    public isPerformanceAcceptable(maxTimeMs: number = 1000, maxMemoryMB: number = 50): boolean {
+        return this.metricsCollector.isPerformanceAcceptable(maxTimeMs, maxMemoryMB);
+    }
+
+    /**
+     * Get performance optimization suggestions
+     */
+    public getOptimizationSuggestions(): string[] {
+        return this.metricsCollector.getOptimizationSuggestions();
+    }
+
+    /**
+     * Record cache hit for performance tracking
+     */
+    public recordCacheHit(): void {
+        this.metricsCollector.recordCacheHit();
+    }
+
+    /**
+     * Record cache miss for performance tracking
+     */
+    public recordCacheMiss(): void {
+        this.metricsCollector.recordCacheMiss();
+    }
+
+    /**
+     * Check if current validation is performing slower than expected
+     */
+    public isPerformanceDegraded(fileSize: number, ruleCount: number): boolean {
+        return this.metricsCollector.isPerformanceDegraded(fileSize, ruleCount);
+    }}
