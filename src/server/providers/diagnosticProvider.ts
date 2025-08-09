@@ -258,8 +258,11 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
             console.warn('Validation performance degraded:', this.metricsCollector.generatePerformanceReport());
         }
 
+        // Remove duplicate diagnostics before returning
+        const deduplicatedDiagnostics = this.deduplicateDiagnostics(diagnostics);
+
         // Limit the number of diagnostics
-        return diagnostics.slice(0, this.settings.maxNumberOfProblems);
+        return deduplicatedDiagnostics.slice(0, this.settings.maxNumberOfProblems);
     }
 
     /**
@@ -2990,4 +2993,25 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
      */
     public isPerformanceDegraded(fileSize: number, ruleCount: number): boolean {
         return this.metricsCollector.isPerformanceDegraded(fileSize, ruleCount);
-    }}
+    }
+
+    /**
+     * Remove duplicate diagnostics based on message, source, and position
+     */
+    private deduplicateDiagnostics(diagnostics: Diagnostic[]): Diagnostic[] {
+        const seen = new Set<string>();
+        const deduplicated: Diagnostic[] = [];
+
+        for (const diagnostic of diagnostics) {
+            // Create a unique key based on message, source, line, and character
+            const key = `${diagnostic.message}|${diagnostic.source}|${diagnostic.range.start.line}|${diagnostic.range.start.character}`;
+            
+            if (!seen.has(key)) {
+                seen.add(key);
+                deduplicated.push(diagnostic);
+            }
+        }
+
+        return deduplicated;
+    }
+}
