@@ -53,9 +53,9 @@ export const ANTLR_GRAMMAR_RULES = {
     // Multi-line pattern keywords
     PATTERN_KEYWORDS: ['exists', 'not', 'eval', 'forall', 'collect', 'accumulate'],
     
-    // Operators from DRL6Lexer.g
-    COMPARISON_OPERATORS: ['==', '!=', '>=', '<=', '>', '<'],
-    LOGICAL_OPERATORS: ['&&', '||', '!'],
+    // Operators from DRL6Lexer.g - expanded to include Drools-specific operators
+    COMPARISON_OPERATORS: ['==', '!=', '>=', '<=', '>', '<', 'contains', 'not contains', 'memberOf', 'not memberOf', 'matches', 'soundslike', 'str', 'in', 'notin'],
+    LOGICAL_OPERATORS: ['&&', '||', '!', 'and', 'or', 'not'],
     ASSIGNMENT_OPERATORS: [':=', '+=', '-=', '*=', '/=', '&=', '|=', '^=', '%='],
     ARITHMETIC_OPERATORS: ['+', '-', '*', '/', '%'],
     
