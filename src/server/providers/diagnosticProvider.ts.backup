@@ -846,11 +846,9 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
                             variableDeclarations.set(variableName, []);
                         }
                         
-                        // Use precise position calculator for accurate positioning
-                        const precisePosition = this.positionCalculator.findVariableDeclarationPosition(
-                            { conditions: [condition], range: condition.range } as WhenNode, 
-                            variableName
-                        );
+                        // Try to find more precise position within the condition
+                        const variableIndex = condition.content.indexOf(match);
+                        const precisePosition = this.calculatePreciseVariablePosition(condition, variableIndex, variableName.length);
                         
                         variableDeclarations.get(variableName)!.push({
                             condition: condition,
@@ -872,7 +870,31 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
         }
     }
 
-
+    /**
+     * Calculate more precise position for variable within condition content
+     */
+    private calculatePreciseVariablePosition(condition: ConditionNode, variableIndex: number, variableLength: number): Range | null {
+        if (variableIndex === -1) return null;
+        
+        // Calculate which line within the condition contains the variable
+        const beforeVariable = condition.content.substring(0, variableIndex);
+        const lineBreaks = (beforeVariable.match(/\n/g) || []).length;
+        const lineNumber = condition.range.start.line + lineBreaks;
+        
+        // Find the character position within that line
+        const lines = condition.content.split('\n');
+        const lineWithVariable = lines[lineBreaks] || condition.content;
+        const charIndex = lineWithVariable.indexOf(condition.content.substring(variableIndex, variableIndex + variableLength));
+        
+        if (charIndex !== -1) {
+            return {
+                start: { line: lineNumber, character: charIndex },
+                end: { line: lineNumber, character: charIndex + variableLength }
+            };
+        }
+        
+        return null;
+    }
 
     /**
      * Validate rule structure and completeness
@@ -1426,19 +1448,36 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
             const isInJavaContext = beforeMatch.includes('//') || beforeMatch.includes('/*');
             
             if (!isInJavaContext) {
-                // Use precise position calculator for accurate positioning
-                const precisePosition = this.positionCalculator.findVariableDeclarationPosition(
-                    { conditions: [condition], range: condition.range } as WhenNode,
-                    variableName
-                );
+                // Find the precise position using document lines
+                const conditionStartLine = condition.range.start.line;
                 
-                if (precisePosition) {
+                // Search in the actual document lines for precise positioning
+                let foundLine = conditionStartLine;
+                let charInLine = -1;
+                
+                for (let i = 0; i < this.documentLines.length; i++) {
+                    if (i >= conditionStartLine) {
+                        const line = this.documentLines[i];
+                        const variableIndex = line.indexOf(variableName);
+                        
+                        if (variableIndex !== -1) {
+                            foundLine = i;
+                            charInLine = variableIndex;
+                            break;
+                        }
+                    }
+                }
+                
+                if (charInLine !== -1) {
                     diagnostics.push({
                         severity: DiagnosticSeverity.Error,
-                        range: precisePosition,
-                        message: `Variable "${variableName}" must start with $ prefix. In Drools LHS, all variables must use $ prefix: $${variableName}`,
-                        source: 'drools-syntax',
-                        code: 'missing-dollar-prefix'
+                        range: {
+                            start: { line: foundLine, character: charInLine },
+                            end: { line: foundLine, character: charInLine + variableName.length }
+                        },
+                    message: `Variable "${variableName}" must start with $ prefix. In Drools LHS, all variables must use $ prefix: $${variableName}`,
+                    source: 'drools-syntax',
+                    code: 'missing-dollar-prefix'
                 });
             }
         }
@@ -1513,16 +1552,13 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
             const isInComplexPattern = content.includes('forall(') || content.includes('exists(') || content.includes('eval(');
             
             if (!isInAccumulate && !isInComplexPattern) {
-                // Use precise position calculator for semicolon positioning
-                const semicolonPosition = this.positionCalculator.findJavaErrorPosition(content, ';', condition.range.start.line);
-                const fallbackRange = {
-                    start: { line: condition.range.start.line, character: condition.range.start.character },
-                    end: { line: condition.range.start.line, character: condition.range.start.character + 1 }
-                };
-                
+                const semicolonIndex = content.indexOf(';');
                 diagnostics.push({
                     severity: DiagnosticSeverity.Warning, // Changed to warning
-                    range: semicolonPosition || fallbackRange,
+                    range: {
+                        start: { line: condition.range.start.line, character: condition.range.start.character + semicolonIndex },
+                        end: { line: condition.range.start.line, character: condition.range.start.character + semicolonIndex + 1 }
+                    },
                     message: 'Semicolons are generally not allowed in when clause conditions. Check if this is correct.',
                     source: 'drools-semantic'
                 });
@@ -1583,7 +1619,6 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
 
         // Check for double colon syntax error (:: should be :)
         const doubleColonPattern = /\$[a-zA-Z_][a-zA-Z0-9_]*\s*::\s*/g;
-        let match;
         while ((match = doubleColonPattern.exec(content)) !== null) {
             diagnostics.push({
                 severity: DiagnosticSeverity.Error,
@@ -1807,14 +1842,28 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
 
             for (const usedVar of usedVariables) {
                 if (!declaredVariables.has(usedVar)) {
-                    // Use precise position calculator for accurate positioning
-                    const precisePosition = this.positionCalculator.findVariablePositionInThenClause(rule.then, usedVar);
+                    // Find the approximate position of the undefined variable
+                    const thenLines = thenActions.split('\n');
+                    let lineIndex = -1;
+                    let charIndex = -1;
+                    
+                    for (let i = 0; i < thenLines.length; i++) {
+                        const index = thenLines[i].indexOf(usedVar);
+                        if (index !== -1) {
+                            lineIndex = i;
+                            charIndex = index;
+                            break;
+                        }
+                    }
+                    
+                    const line = rule.then.range.start.line + (lineIndex >= 0 ? lineIndex : 0);
+                    const character = charIndex >= 0 ? charIndex : 0;
                     
                     diagnostics.push({
                         severity: DiagnosticSeverity.Error,
-                        range: precisePosition || {
-                            start: { line: rule.then.range.start.line, character: 0 },
-                            end: { line: rule.then.range.start.line, character: usedVar.length }
+                        range: {
+                            start: { line, character },
+                            end: { line, character: character + usedVar.length }
                         },
                         message: `Undefined variable: ${usedVar}`,
                         source: 'drools-semantic'
@@ -3199,11 +3248,28 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
      * Find the specific position of a variable within a condition
      */
     private findVariablePositionInCondition(condition: ConditionNode, variableName: string): Range | null {
-        // Use precise position calculator for accurate positioning
-        return this.positionCalculator.findVariableDeclarationPosition(
-            { conditions: [condition], range: condition.range } as WhenNode,
-            variableName
-        );
+        const content = condition.content;
+        const variableIndex = content.indexOf(variableName);
+        
+        if (variableIndex !== -1) {
+            const conditionStartLine = condition.range.start.line;
+            // Calculate which line within the condition contains the variable
+            const beforeVariable = content.substring(0, variableIndex);
+            const lineBreaks = (beforeVariable.match(/\n/g) || []).length;
+            const lineNumber = conditionStartLine + lineBreaks;
+            
+            // Find the character position within that line
+            const lines = content.split('\n');
+            const lineWithVariable = lines[lineBreaks] || content;
+            const charIndex = lineWithVariable.indexOf(variableName);
+            
+            return {
+                start: { line: lineNumber, character: charIndex },
+                end: { line: lineNumber, character: charIndex + variableName.length }
+            };
+        }
+        
+        return null;
     }
 
     /**

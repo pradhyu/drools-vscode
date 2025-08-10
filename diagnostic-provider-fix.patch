@@ -1,0 +1,85 @@
+/**
+ * Fix for precise underline positioning in diagnostic provider
+ * 
+ * The issue: The diagnostic provider has a corrupted findVariablePositionInThenClause method
+ * that uses broken regex escaping and doesn't use our PrecisePositionCalculator.
+ * 
+ * The solution: Replace the broken method to use our PrecisePositionCalculator.
+ */
+
+// REPLACE THIS BROKEN METHOD in src/server/providers/diagnosticProvider.ts:
+
+/*
+    private findVariablePositionInThenClause(thenClause: ThenNode, variableName: string): Range | null {
+        if (!thenClause.actions) return null;
+        
+        // Get the actual document lines for precise positioning
+        const thenStartLine = thenClause.range.start.line + 1; // +1 to skip "then" line
+        
+        // Search through document lines starting from then clause
+        for (let lineIndex = thenStartLine; lineIndex < this.documentLines.length; lineIndex++) {
+            const line = this.documentLines[lineIndex];
+            
+            // Stop if we've reached the end of the rule (\"end\" keyword)
+            if (line.trim() === 'end' || line.trim().startsWith('end')) {
+                break;
+            }
+            
+            // Use regex to find the exact variable position as a complete word
+            const escapedVariableName = variableName.replace(/[.*+?^${}()|[\]\\]/g, '\\CORRUPTED-UUID');
+            const variableRegex = new RegExp('\\b' + escapedVariableName + '\\b', 'g');
+            
+            let match;
+            while ((match = variableRegex.exec(line)) !== null) {
+                // Found the variable, return precise position
+                return {
+                    start: { line: lineIndex, character: match.index },
+                    end: { line: lineIndex, character: match.index + variableName.length }
+                };
+            }
+        }
+        
+        return null;
+    }
+*/
+
+// WITH THIS FIXED METHOD:
+
+/*
+    private findVariablePositionInThenClause(thenClause: ThenNode, variableName: string): Range | null {
+        // Use the precise position calculator for accurate positioning
+        return this.positionCalculator.findVariablePositionInThenClause(thenClause, variableName);
+    }
+*/
+
+// ADDITIONAL METHODS TO ADD for other positioning needs:
+
+/*
+    private findVariableDeclarationPosition(whenClause: WhenNode, variableName: string): Range | null {
+        // Use the precise position calculator for accurate positioning
+        return this.positionCalculator.findVariableDeclarationPosition(whenClause, variableName);
+    }
+
+    private findJavaErrorPosition(line: string, errorToken: string, lineNumber: number): Range | null {
+        // Use the precise position calculator for accurate positioning
+        return this.positionCalculator.findJavaErrorPosition(line, errorToken, lineNumber);
+    }
+*/
+
+// ALSO NEED TO ENSURE the positionCalculator is properly initialized in the constructor:
+
+/*
+    constructor(settings: DiagnosticSettings) {
+        this.settings = settings;
+    }
+
+    public provideDiagnostics(document: TextDocument, ast: DroolsAST, parseErrors: ParseError[]): Diagnostic[] {
+        this.document = document;
+        this.documentLines = document.getText().split('\n');
+        
+        // Initialize position calculator with document lines
+        this.positionCalculator = new PrecisePositionCalculator(this.documentLines);
+        
+        // ... rest of the method
+    }
+*/
