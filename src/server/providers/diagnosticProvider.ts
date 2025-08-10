@@ -115,6 +115,14 @@ class EnhancedRuleNameValidator implements RuleNameValidator {
             });
         }
 
+        // Check for rule names starting with numbers (invalid in Drools)
+        if (unquotedName && /^[0-9]/.test(unquotedName)) {
+            issues.push({
+                severity: DiagnosticSeverity.Error,
+                message: 'Rule must have a name (cannot start with a number)'
+            });
+        }
+
         // Don't flag rule names with spaces as invalid - they're valid if quoted in source
         // The parser should handle the syntax validation
 
@@ -1021,10 +1029,11 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
         if (line.includes('system.out.println')) {
             const position = this.positionCalculator.findJavaErrorPosition(line, 'system', lineNumber);
             if (position) {
+                const positionInfo = `[Line ${position.start.line + 1}, Col ${position.start.character + 1}-${position.end.character}]`;
                 diagnostics.push({
                     severity: DiagnosticSeverity.Error,
                     range: position,
-                    message: 'Incorrect capitalization: "system" should be "System" (capital S)',
+                    message: `Incorrect capitalization: "system" should be "System" (capital S) ${positionInfo}`,
                     source: 'drools-syntax',
                     code: 'java-capitalization'
                 });
@@ -1035,10 +1044,11 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
         if (line.includes('Sytem.out.println')) {
             const position = this.positionCalculator.findJavaErrorPosition(line, 'Sytem', lineNumber);
             if (position) {
+                const positionInfo = `[Line ${position.start.line + 1}, Col ${position.start.character + 1}-${position.end.character}]`;
                 diagnostics.push({
                     severity: DiagnosticSeverity.Error,
                     range: position,
-                    message: 'Typo in class name: "Sytem" should be "System"',
+                    message: `Typo in class name: "Sytem" should be "System" ${positionInfo}`,
                     source: 'drools-syntax',
                     code: 'java-typo'
                 });
@@ -1062,13 +1072,14 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
                 const typeWord = match[0].split(/\s+/)[0]; // Get just the type word
                 const typeIndex = match.index;
 
+                const positionInfo = `[Line ${lineNumber + 1}, Col ${typeIndex + 1}-${typeIndex + typeWord.length}]`;
                 diagnostics.push({
                     severity: DiagnosticSeverity.Warning,
                     range: {
                         start: { line: lineNumber, character: typeIndex },
                         end: { line: lineNumber, character: typeIndex + typeWord.length }
                     },
-                    message: `Java type should be capitalized: "${typeWord}" should be "${error.correct}"`,
+                    message: `Java type should be capitalized: "${typeWord}" should be "${error.correct}" ${positionInfo}`,
                     source: 'drools-syntax',
                     code: 'java-capitalization'
                 });
@@ -1152,13 +1163,14 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
         for (const typo of methodTypos) {
             typo.pattern.lastIndex = 0;
             while ((match = typo.pattern.exec(line)) !== null) {
+                const positionInfo = `[Line ${lineNumber + 1}, Col ${match.index + 1}-${match.index + match[0].length}]`;
                 diagnostics.push({
                     severity: DiagnosticSeverity.Warning,
                     range: {
                         start: { line: lineNumber, character: match.index },
                         end: { line: lineNumber, character: match.index + match[0].length }
                     },
-                    message: `Possible typo in method name: "${match[0]}" should be "${typo.correct}"`,
+                    message: `Possible typo in method name: "${match[0]}" should be "${typo.correct}" ${positionInfo}`,
                     source: 'drools-syntax',
                     code: 'method-typo'
                 });
@@ -1663,13 +1675,16 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
                     // Find the specific position of the undefined variable in the then clause
                     const variablePosition = this.findVariablePositionInThenClause(rule.then, usedVariable);
 
+                    const range = variablePosition || {
+                        start: { line: rule.then.range.start.line, character: rule.then.range.start.character },
+                        end: { line: rule.then.range.end.line, character: rule.then.range.end.character }
+                    };
+                    const positionInfo = `[Line ${range.start.line + 1}, Col ${range.start.character + 1}-${range.end.character}]`;
+                    
                     diagnostics.push({
                         severity: DiagnosticSeverity.Error,
-                        range: variablePosition || {
-                            start: { line: rule.then.range.start.line, character: rule.then.range.start.character },
-                            end: { line: rule.then.range.end.line, character: rule.then.range.end.character }
-                        },
-                        message: `Undefined variable: ${usedVariable} is used but not declared in the when clause.`,
+                        range: range,
+                        message: `Undefined variable: ${usedVariable} is used but not declared in the when clause ${positionInfo}`,
                         source: 'drools-semantic',
                         code: 'undefined-variable' // Helps with error categorization and gutter icons
                     });

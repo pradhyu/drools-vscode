@@ -160,7 +160,6 @@ export class PrecisePositionCalculator implements IPositionCalculator {
             // Find the variable position using precise word boundary matching
             const position = this.findVariableDeclarationInLine(line, variableName, lineIndex, inMultiLinePattern);
             if (position) {
-                console.info("variable=" + variableName + " in " + position + " :: lineIndex " + lineIndex);
                 return position;
             }
         }
