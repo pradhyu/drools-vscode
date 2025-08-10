@@ -36,32 +36,32 @@ export class PrecisePositionCalculator implements IPositionCalculator {
      */
     public findVariablePositionInThenClause(thenClause: ThenNode, variableName: string): Range | null {
         if (!thenClause.actions) return null;
-        
+
         // Get the actual document lines for precise positioning
         const thenStartLine = thenClause.range.start.line;
         const thenEndLine = thenClause.range.end.line;
-        
+
         // Search through document lines within the then clause range
         for (let lineIndex = thenStartLine; lineIndex <= thenEndLine && lineIndex < this.documentLines.length; lineIndex++) {
             const line = this.documentLines[lineIndex];
-            
+
             // Skip the "then" keyword line itself
             if (lineIndex === thenStartLine && line.trim().startsWith('then')) {
                 continue;
             }
-            
+
             // Stop if we've reached the end of the rule ("end" keyword)
             if (line.trim() === 'end' || line.trim().startsWith('end')) {
                 break;
             }
-            
+
             // Find the variable position using precise word boundary matching
             const position = this.findTokenInLine(line, variableName, lineIndex);
             if (position) {
                 return position;
             }
         }
-        
+
         return null;
     }
 
@@ -72,16 +72,16 @@ export class PrecisePositionCalculator implements IPositionCalculator {
      */
     public findVariableDeclarationPosition(whenClause: WhenNode, variableName: string): Range | null {
         if (!whenClause.conditions) return null;
-        
+
         const whenStartLine = whenClause.range.start.line;
         const whenEndLine = whenClause.range.end.line;
-        
+
         // First, try to find the variable in the parsed conditions if available
         const conditionPosition = this.findVariableInConditions(whenClause.conditions, variableName);
         if (conditionPosition) {
             return conditionPosition;
         }
-        
+
         // Fallback: Search through document lines within the when clause range
         return this.findVariableInWhenClauseLines(whenStartLine, whenEndLine, variableName);
     }
@@ -100,7 +100,7 @@ export class PrecisePositionCalculator implements IPositionCalculator {
                     condition.range.start.line
                 );
             }
-            
+
             // Check nested conditions (for exists, not, forall, etc.)
             if (condition.nestedConditions && condition.nestedConditions.length > 0) {
                 const nestedPosition = this.findVariableInConditions(condition.nestedConditions, variableName);
@@ -108,7 +108,7 @@ export class PrecisePositionCalculator implements IPositionCalculator {
                     return nestedPosition;
                 }
             }
-            
+
             // Check multi-line patterns
             if (condition.multiLinePattern && condition.multiLinePattern.innerConditions) {
                 const patternPosition = this.findVariableInConditions(condition.multiLinePattern.innerConditions, variableName);
@@ -117,7 +117,7 @@ export class PrecisePositionCalculator implements IPositionCalculator {
                 }
             }
         }
-        
+
         return null;
     }
 
@@ -127,43 +127,44 @@ export class PrecisePositionCalculator implements IPositionCalculator {
     private findVariableInWhenClauseLines(whenStartLine: number, whenEndLine: number, variableName: string): Range | null {
         let inMultiLinePattern = false;
         let parenthesesDepth = 0;
-        
+
         // Search through document lines within the when clause range
         for (let lineIndex = whenStartLine; lineIndex <= whenEndLine && lineIndex < this.documentLines.length; lineIndex++) {
             const line = this.documentLines[lineIndex];
             const trimmedLine = line.trim();
-            
+
             // Skip the "when" keyword line itself
             if (lineIndex === whenStartLine && trimmedLine.startsWith('when')) {
                 continue;
             }
-            
+
             // Stop if we've reached the then clause
             if (trimmedLine.startsWith('then')) {
                 break;
             }
-            
+
             // Track multi-line patterns (exists, not, forall, accumulate, etc.)
             if (this.isMultiLinePatternStart(trimmedLine)) {
                 inMultiLinePattern = true;
                 parenthesesDepth = 0;
             }
-            
+
             // Track parentheses depth for multi-line patterns
             parenthesesDepth += this.countParentheses(line);
-            
+
             // Check if we're exiting a multi-line pattern
             if (inMultiLinePattern && parenthesesDepth <= 0 && this.isPatternEnd(trimmedLine)) {
                 inMultiLinePattern = false;
             }
-            
+
             // Find the variable position using precise word boundary matching
             const position = this.findVariableDeclarationInLine(line, variableName, lineIndex, inMultiLinePattern);
             if (position) {
+                console.info("variable=" + variableName + " in " + position + " :: lineIndex " + lineIndex);
                 return position;
             }
         }
-        
+
         return null;
     }
 
@@ -176,7 +177,7 @@ export class PrecisePositionCalculator implements IPositionCalculator {
         // 2. $var : Type() from ...
         // 3. Type($var : field, ...)
         // 4. accumulate(...; $var : ...)
-        
+
         // First try to find the exact variable name
         let position = this.findTokenInLine(line, variableName, lineIndex);
         if (position) {
@@ -185,7 +186,7 @@ export class PrecisePositionCalculator implements IPositionCalculator {
                 return position;
             }
         }
-        
+
         // If the variable name doesn't include $, try with $ prefix
         if (!variableName.startsWith('$')) {
             const dollarVariableName = '$' + variableName;
@@ -194,7 +195,7 @@ export class PrecisePositionCalculator implements IPositionCalculator {
                 return position;
             }
         }
-        
+
         return null;
     }
 
@@ -207,30 +208,30 @@ export class PrecisePositionCalculator implements IPositionCalculator {
         // - $var : Type(
         // - Type($var :
         // - accumulate pattern with $var
-        
+
         const beforeVar = line.substring(0, startPosition).trim();
         const afterVar = line.substring(startPosition + variableName.length).trim();
-        
+
         // Pattern 1: $var : Type (most common)
         if (variableName.startsWith('$') && afterVar.startsWith(':')) {
             return true;
         }
-        
+
         // Pattern 2: Type($var : field) - variable as constraint
         if (beforeVar.endsWith('(') && afterVar.startsWith(':')) {
             return true;
         }
-        
+
         // Pattern 3: accumulate patterns
         if (beforeVar.includes('accumulate') || beforeVar.includes('collect')) {
             return true;
         }
-        
+
         // Pattern 4: exists/not patterns
         if (beforeVar.includes('exists') || beforeVar.includes('not')) {
             return true;
         }
-        
+
         return false;
     }
 
@@ -277,24 +278,29 @@ export class PrecisePositionCalculator implements IPositionCalculator {
      * Supports system/System, method names, and other Java constructs
      */
     public findJavaErrorPosition(line: string, errorToken: string, lineNumber: number): Range | null {
+        // Return null for empty or invalid tokens
+        if (!errorToken || errorToken.trim() === '') {
+            return null;
+        }
+
         // First try exact match with word boundaries
         let position = this.findTokenInLine(line, errorToken, lineNumber);
         if (position) {
             return position;
         }
-        
+
         // Try case-insensitive matching for capitalization errors
         position = this.findJavaErrorCaseInsensitive(line, errorToken, lineNumber);
         if (position) {
             return position;
         }
-        
+
         // Try fuzzy matching for typos (limited to common Java constructs)
         position = this.findJavaErrorFuzzy(line, errorToken, lineNumber);
         if (position) {
             return position;
         }
-        
+
         return null;
     }
 
@@ -309,7 +315,7 @@ export class PrecisePositionCalculator implements IPositionCalculator {
             'Exception', 'RuntimeException', 'IllegalArgumentException',
             'Math', 'Object', 'Class', 'Thread'
         ];
-        
+
         // Check if the error token is a case variation of a known Java construct
         for (const construct of javaConstructs) {
             if (errorToken.toLowerCase() === construct.toLowerCase() && errorToken !== construct) {
@@ -324,7 +330,7 @@ export class PrecisePositionCalculator implements IPositionCalculator {
                 }
             }
         }
-        
+
         return null;
     }
 
@@ -350,7 +356,7 @@ export class PrecisePositionCalculator implements IPositionCalculator {
             ['prinln', 'println'],
             ['prntln', 'println']
         ]);
-        
+
         // Check if the error token is a known typo
         if (commonTypos.has(errorToken)) {
             const pattern = this.createWordBoundaryPattern(errorToken);
@@ -362,7 +368,7 @@ export class PrecisePositionCalculator implements IPositionCalculator {
                 };
             }
         }
-        
+
         return null;
     }
 
@@ -381,7 +387,7 @@ export class PrecisePositionCalculator implements IPositionCalculator {
         // Look for method calls: methodName( or object.methodName(
         const methodPattern = new RegExp(`\\b${this.escapeSpecialCharacters(methodName)}\\s*\\(`, 'g');
         const match = methodPattern.exec(line);
-        
+
         if (match) {
             // Return position of just the method name, not including parentheses
             const methodNameLength = methodName.length;
@@ -390,7 +396,7 @@ export class PrecisePositionCalculator implements IPositionCalculator {
                 end: { line: lineNumber, character: match.index + methodNameLength }
             };
         }
-        
+
         return null;
     }
 
@@ -404,7 +410,7 @@ export class PrecisePositionCalculator implements IPositionCalculator {
             new RegExp(`\\b${this.escapeSpecialCharacters(className)}\\s+\\w+`, 'g'),
             new RegExp(`\\b${this.escapeSpecialCharacters(className)}\\b`, 'g')
         ];
-        
+
         for (const pattern of patterns) {
             const match = pattern.exec(line);
             if (match) {
@@ -418,7 +424,7 @@ export class PrecisePositionCalculator implements IPositionCalculator {
                 }
             }
         }
-        
+
         return null;
     }
 
@@ -429,14 +435,14 @@ export class PrecisePositionCalculator implements IPositionCalculator {
         // Look for package names in import statements or qualified class names
         const packagePattern = new RegExp(`\\b${this.escapeSpecialCharacters(packageName)}\\b`, 'g');
         const match = packagePattern.exec(line);
-        
+
         if (match) {
             return {
                 start: { line: lineNumber, character: match.index },
                 end: { line: lineNumber, character: match.index + packageName.length }
             };
         }
-        
+
         return null;
     }
 
@@ -447,7 +453,7 @@ export class PrecisePositionCalculator implements IPositionCalculator {
     private findTokenInLine(line: string, token: string, lineNumber: number): Range | null {
         // Create a word boundary pattern for the token
         const pattern = this.createWordBoundaryPattern(token);
-        
+
         const match = pattern.exec(line);
         if (match) {
             return {
@@ -455,7 +461,7 @@ export class PrecisePositionCalculator implements IPositionCalculator {
                 end: { line: lineNumber, character: match.index + match[0].length }
             };
         }
-        
+
         return null;
     }
 
@@ -465,7 +471,7 @@ export class PrecisePositionCalculator implements IPositionCalculator {
      */
     private createWordBoundaryPattern(token: string): RegExp {
         const escapedToken = this.escapeSpecialCharacters(token);
-        
+
         // For variables starting with $, we need special handling
         if (token.startsWith('$')) {
             // Match $ followed by word boundary for the variable name
@@ -473,7 +479,7 @@ export class PrecisePositionCalculator implements IPositionCalculator {
             const escapedVariableName = this.escapeSpecialCharacters(variableName);
             return new RegExp(`\\$\\b${escapedVariableName}\\b`, 'g');
         }
-        
+
         // For regular tokens, use standard word boundaries
         return new RegExp(`\\b${escapedToken}\\b`, 'g');
     }
@@ -495,23 +501,23 @@ export class PrecisePositionCalculator implements IPositionCalculator {
     private findAllMatches(pattern: RegExp, content: string): MatchResult[] {
         const matches: MatchResult[] = [];
         let match;
-        
+
         // Reset regex state
         pattern.lastIndex = 0;
-        
+
         while ((match = pattern.exec(content)) !== null) {
             matches.push({
                 index: match.index,
                 length: match[0].length,
                 matchedText: match[0]
             });
-            
+
             // Prevent infinite loop for zero-length matches
             if (match.index === pattern.lastIndex) {
                 pattern.lastIndex++;
             }
         }
-        
+
         return matches;
     }
 
@@ -523,7 +529,7 @@ export class PrecisePositionCalculator implements IPositionCalculator {
         try {
             // Test pattern creation
             const regex = new RegExp(pattern, 'g');
-            
+
             // Check for potentially problematic patterns
             if (this.isProblematicPattern(pattern)) {
                 return {
@@ -531,19 +537,19 @@ export class PrecisePositionCalculator implements IPositionCalculator {
                     error: 'Pattern may cause performance issues or infinite loops'
                 };
             }
-            
+
             // Test with a simple string to ensure it doesn't hang
             const testString = 'test string for validation';
             const startTime = Date.now();
-            
+
             // Set a timeout for pattern testing
             let matchCount = 0;
             let match;
             regex.lastIndex = 0;
-            
+
             while ((match = regex.exec(testString)) !== null && matchCount < 100) {
                 matchCount++;
-                
+
                 // Check for timeout (should be very fast for simple test)
                 if (Date.now() - startTime > 10) {
                     return {
@@ -551,15 +557,15 @@ export class PrecisePositionCalculator implements IPositionCalculator {
                         error: 'Pattern execution timeout - may cause performance issues'
                     };
                 }
-                
+
                 // Prevent infinite loop
                 if (match.index === regex.lastIndex) {
                     regex.lastIndex++;
                 }
             }
-            
+
             return { isValid: true };
-            
+
         } catch (error) {
             return {
                 isValid: false,
@@ -583,7 +589,7 @@ export class PrecisePositionCalculator implements IPositionCalculator {
             /\{\d+,\}/,         // Open-ended quantifiers with large numbers
             /\(\?\:/,           // Non-capturing groups (not problematic but complex)
         ];
-        
+
         // Check for nested quantifiers and other problematic constructs
         return problematicPatterns.some(problemPattern => problemPattern.test(pattern));
     }
@@ -596,10 +602,10 @@ export class PrecisePositionCalculator implements IPositionCalculator {
         try {
             // First escape the token
             const escapedToken = this.escapeSpecialCharacters(token);
-            
+
             // Create the pattern string
             let patternString: string;
-            
+
             if (token.startsWith('$')) {
                 // Special handling for variables
                 const variableName = token.substring(1);
@@ -609,17 +615,17 @@ export class PrecisePositionCalculator implements IPositionCalculator {
                 // Regular word boundary pattern
                 patternString = `\\b${escapedToken}\\b`;
             }
-            
+
             // Validate the pattern
             const validation = this.validateRegexPattern(patternString);
             if (!validation.isValid) {
                 console.warn(`Invalid regex pattern for token "${token}": ${validation.error}`);
                 return null;
             }
-            
+
             // Create and return the regex
             return new RegExp(patternString, flags);
-            
+
         } catch (error) {
             console.warn(`Error creating regex pattern for token "${token}":`, error);
             return null;
@@ -636,12 +642,12 @@ export class PrecisePositionCalculator implements IPositionCalculator {
         if (pattern) {
             return pattern;
         }
-        
+
         // Fallback 1: Simple literal match without word boundaries
         try {
             const escapedToken = this.escapeSpecialCharacters(token);
             pattern = new RegExp(escapedToken, 'g');
-            
+
             const validation = this.validateRegexPattern(escapedToken);
             if (validation.isValid) {
                 console.warn(`Using fallback literal pattern for token "${token}"`);
@@ -650,12 +656,12 @@ export class PrecisePositionCalculator implements IPositionCalculator {
         } catch (error) {
             // Continue to next fallback
         }
-        
+
         // Fallback 2: Character-by-character matching for very complex tokens
         try {
             const charPattern = token.split('').map(char => this.escapeSpecialCharacters(char)).join('');
             pattern = new RegExp(charPattern, 'g');
-            
+
             const validation = this.validateRegexPattern(charPattern);
             if (validation.isValid) {
                 console.warn(`Using character-by-character pattern for token "${token}"`);
@@ -664,7 +670,7 @@ export class PrecisePositionCalculator implements IPositionCalculator {
         } catch (error) {
             // Continue to final fallback
         }
-        
+
         // Final fallback: Return null and let caller handle
         console.error(`Unable to create any regex pattern for token "${token}"`);
         return null;
@@ -677,26 +683,26 @@ export class PrecisePositionCalculator implements IPositionCalculator {
         try {
             const matches: string[] = [];
             let match;
-            
+
             // Reset pattern
             pattern.lastIndex = 0;
-            
+
             while ((match = pattern.exec(sampleText)) !== null) {
                 matches.push(match[0]);
-                
+
                 // Prevent infinite loop
                 if (match.index === pattern.lastIndex) {
                     pattern.lastIndex++;
                 }
             }
-            
+
             // Check if matches are as expected
             if (matches.length !== expectedMatches.length) {
                 return false;
             }
-            
+
             return matches.every((match, index) => match === expectedMatches[index]);
-            
+
         } catch (error) {
             console.error('Error testing pattern accuracy:', error);
             return false;
@@ -710,7 +716,7 @@ export class PrecisePositionCalculator implements IPositionCalculator {
     public validateRangePrecision(range: Range, lineContent: string): boolean {
         const startChar = range.start.character;
         const endChar = range.end.character;
-        
+
         // Check for leading whitespace inclusion
         if (startChar > 0) {
             const tokenStart = lineContent.substring(startChar);
@@ -718,7 +724,7 @@ export class PrecisePositionCalculator implements IPositionCalculator {
                 return false; // Range includes leading whitespace
             }
         }
-        
+
         // Check for trailing whitespace inclusion
         if (endChar < lineContent.length) {
             const tokenEnd = lineContent.substring(0, endChar);
@@ -726,7 +732,7 @@ export class PrecisePositionCalculator implements IPositionCalculator {
                 return false; // Range includes trailing whitespace
             }
         }
-        
+
         return true;
     }
 
@@ -737,21 +743,21 @@ export class PrecisePositionCalculator implements IPositionCalculator {
     public checkWordBoundaries(range: Range, lineContent: string): boolean {
         const startChar = range.start.character;
         const endChar = range.end.character;
-        
+
         // Check start boundary
         const charBefore = startChar > 0 ? lineContent[startChar - 1] : '';
         const charAtStart = lineContent[startChar];
-        
+
         // Check end boundary
         const charAtEnd = endChar < lineContent.length ? lineContent[endChar] : '';
         const charBeforeEnd = endChar > 0 ? lineContent[endChar - 1] : '';
-        
+
         // Word boundary rules:
         // - Start should be after whitespace, punctuation, or beginning of line
         // - End should be before whitespace, punctuation, or end of line
         const isValidStart = startChar === 0 || /[\s\W]/.test(charBefore) && /[\w$]/.test(charAtStart);
         const isValidEnd = endChar === lineContent.length || /[\w$]/.test(charBeforeEnd) && /[\s\W]/.test(charAtEnd);
-        
+
         return isValidStart && isValidEnd;
     }
 
@@ -762,12 +768,12 @@ export class PrecisePositionCalculator implements IPositionCalculator {
     public visualizeUnderlinePosition(range: Range, lineContent: string): string {
         const startChar = range.start.character;
         const endChar = range.end.character;
-        
+
         // Create the visual representation
         const beforeUnderline = ' '.repeat(startChar);
         const underline = '^'.repeat(endChar - startChar);
         const afterUnderline = ' '.repeat(Math.max(0, lineContent.length - endChar));
-        
+
         return `Line: ${lineContent}\n      ${beforeUnderline}${underline}${afterUnderline}`;
     }
 
@@ -784,15 +790,15 @@ export class PrecisePositionCalculator implements IPositionCalculator {
         const issues: string[] = [];
         const startChar = range.start.character;
         const endChar = range.end.character;
-        
+
         // Extract the actual text
         const extractedText = lineContent.substring(startChar, endChar);
-        
+
         // Check if extracted text matches expected token
         if (extractedText !== expectedToken) {
             issues.push(`Extracted text "${extractedText}" does not match expected token "${expectedToken}"`);
         }
-        
+
         // Check for leading whitespace
         if (startChar > 0 && /\s/.test(lineContent[startChar - 1])) {
             const tokenStart = lineContent.substring(startChar);
@@ -800,7 +806,7 @@ export class PrecisePositionCalculator implements IPositionCalculator {
                 issues.push('Range includes leading whitespace');
             }
         }
-        
+
         // Check for trailing whitespace
         if (endChar < lineContent.length && /\s/.test(lineContent[endChar])) {
             const tokenEnd = lineContent.substring(0, endChar);
@@ -808,20 +814,20 @@ export class PrecisePositionCalculator implements IPositionCalculator {
                 issues.push('Range includes trailing whitespace');
             }
         }
-        
+
         // Check word boundaries
         if (!this.checkWordBoundaries(range, lineContent)) {
             issues.push('Range does not align with proper word boundaries');
         }
-        
+
         // Check for range bounds
         if (startChar < 0 || endChar > lineContent.length || startChar >= endChar) {
             issues.push('Range has invalid bounds');
         }
-        
+
         // Create visualization
         const visualization = this.visualizeUnderlinePosition(range, lineContent);
-        
+
         return {
             isValid: issues.length === 0,
             issues,
@@ -836,18 +842,18 @@ export class PrecisePositionCalculator implements IPositionCalculator {
      */
     public debugRange(range: Range, lineContent: string, expectedToken: string, context?: string): void {
         const validation = this.validateRangeComprehensive(range, lineContent, expectedToken);
-        
+
         console.log(`\n=== Range Debug ${context ? `(${context})` : ''} ===`);
         console.log(`Expected token: "${expectedToken}"`);
         console.log(`Range: ${range.start.character}-${range.end.character}`);
         console.log(`Extracted: "${validation.extractedText}"`);
         console.log(`Valid: ${validation.isValid ? '✅' : '❌'}`);
-        
+
         if (validation.issues.length > 0) {
             console.log('Issues:');
             validation.issues.forEach(issue => console.log(`  - ${issue}`));
         }
-        
+
         console.log('\nVisualization:');
         console.log(validation.visualization);
     }
@@ -861,25 +867,25 @@ export class PrecisePositionCalculator implements IPositionCalculator {
         results: Array<{ isValid: boolean; issues: string[]; extractedText: string }>;
         overlaps: Array<{ range1Index: number; range2Index: number }>;
     } {
-        const results = ranges.map(({ range, expectedToken }) => 
+        const results = ranges.map(({ range, expectedToken }) =>
             this.validateRangeComprehensive(range, lineContent, expectedToken)
         );
-        
+
         // Check for overlapping ranges
         const overlaps: Array<{ range1Index: number; range2Index: number }> = [];
         for (let i = 0; i < ranges.length; i++) {
             for (let j = i + 1; j < ranges.length; j++) {
                 const range1 = ranges[i].range;
                 const range2 = ranges[j].range;
-                
+
                 // Check if ranges overlap
-                if (range1.start.character < range2.end.character && 
+                if (range1.start.character < range2.end.character &&
                     range2.start.character < range1.end.character) {
                     overlaps.push({ range1Index: i, range2Index: j });
                 }
             }
         }
-        
+
         return {
             allValid: results.every(r => r.isValid) && overlaps.length === 0,
             results,
@@ -901,11 +907,11 @@ export class PrecisePositionCalculator implements IPositionCalculator {
         const endTime = performance.now();
         const durationMs = endTime - startTime;
         const isPerformant = durationMs <= warningThresholdMs;
-        
+
         if (!isPerformant) {
             console.warn(`Performance warning: ${operationName} took ${durationMs.toFixed(2)}ms (threshold: ${warningThresholdMs}ms)`);
         }
-        
+
         return {
             result,
             durationMs,
@@ -925,28 +931,28 @@ export class PrecisePositionCalculator implements IPositionCalculator {
         let report = `\n=== Positioning Report for Line ${lineNumber} ===\n`;
         report += `Line content: "${lineContent}"\n`;
         report += `Line length: ${lineContent.length} characters\n\n`;
-        
+
         ranges.forEach(({ range, expectedToken, context }, index) => {
             const validation = this.validateRangeComprehensive(range, lineContent, expectedToken);
-            
+
             report += `--- Range ${index + 1} ${context ? `(${context})` : ''} ---\n`;
             report += `Expected: "${expectedToken}"\n`;
             report += `Position: ${range.start.character}-${range.end.character}\n`;
             report += `Extracted: "${validation.extractedText}"\n`;
             report += `Valid: ${validation.isValid ? '✅' : '❌'}\n`;
-            
+
             if (validation.issues.length > 0) {
                 report += `Issues:\n`;
                 validation.issues.forEach(issue => report += `  - ${issue}\n`);
             }
-            
+
             report += `\nVisualization:\n${validation.visualization}\n\n`;
         });
-        
+
         // Check for overlaps
         const rangeData = ranges.map(r => ({ range: r.range, expectedToken: r.expectedToken }));
         const multiValidation = this.validateMultipleRanges(rangeData, lineContent);
-        
+
         if (multiValidation.overlaps.length > 0) {
             report += `--- Overlapping Ranges ---\n`;
             multiValidation.overlaps.forEach(({ range1Index, range2Index }) => {
@@ -954,9 +960,9 @@ export class PrecisePositionCalculator implements IPositionCalculator {
             });
             report += '\n';
         }
-        
+
         report += `Overall validation: ${multiValidation.allValid ? '✅ All ranges valid' : '❌ Issues found'}\n`;
-        
+
         return report;
     }
 }

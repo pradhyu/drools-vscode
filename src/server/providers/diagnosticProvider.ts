@@ -17,15 +17,15 @@ import { PrecisePositionCalculator, IPositionCalculator } from './positionCalcul
  */
 class ValidationState {
     private completedValidations: Set<ValidationType> = new Set();
-    
+
     reset(): void {
         this.completedValidations.clear();
     }
-    
+
     isComplete(type: ValidationType): boolean {
         return this.completedValidations.has(type);
     }
-    
+
     markComplete(type: ValidationType): void {
         this.completedValidations.add(type);
     }
@@ -102,11 +102,11 @@ class EnhancedRuleNameValidator implements RuleNameValidator {
         // So we need to check the original source to see if it was quoted
         const isQuoted = this.isQuotedRuleName(rule.name);
         const unquotedName = this.extractUnquotedRuleName(rule.name);
-        
+
         // For rule names that contain spaces, they MUST be quoted in the source
         // But the parser extracts them without quotes, so we should be more lenient
         const issues: ValidationIssue[] = [];
-        
+
         // Only validate for truly problematic rule names
         if (unquotedName.trim() === '') {
             issues.push({
@@ -114,7 +114,7 @@ class EnhancedRuleNameValidator implements RuleNameValidator {
                 message: 'Rule name cannot be empty'
             });
         }
-        
+
         // Don't flag rule names with spaces as invalid - they're valid if quoted in source
         // The parser should handle the syntax validation
 
@@ -233,10 +233,10 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
     public provideDiagnostics(document: TextDocument, ast: DroolsAST, parseErrors: ParseError[]): Diagnostic[] {
         this.document = document;
         this.documentLines = document.getText().split('\n');
-        
+
         // Initialize position calculator with document lines
         this.positionCalculator = new PrecisePositionCalculator(this.documentLines);
-        
+
         const diagnostics: Diagnostic[] = [];
 
         // Reset validation state for new validation cycle
@@ -252,12 +252,12 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
 
         // Finalize performance metrics
         const finalMetrics = this.metricsCollector.finalizeMetrics();
-        
+
         // Add performance benchmark for this validation
         const fileSize = document.getText().length;
         const ruleCount = ast.rules.length;
         this.metricsCollector.addBenchmark(fileSize, ruleCount);
-        
+
         // Check for performance issues (optional logging)
         if (this.metricsCollector.isPerformanceDegraded(fileSize, ruleCount)) {
             console.warn('Validation performance degraded:', this.metricsCollector.generatePerformanceReport());
@@ -281,10 +281,10 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
         if (this.settings.enableSyntaxValidation && !this.validationState.isComplete(ValidationType.SYNTAX)) {
             this.metricsCollector.startPhase(ValidationType.SYNTAX);
             const initialDiagnosticCount = diagnostics.length;
-            
+
             this.validateDroolsKeywords(diagnostics);
             this.validateSyntaxDetails(ast, diagnostics);
-            
+
             const errorsFound = diagnostics.slice(initialDiagnosticCount).filter(d => d.severity === 1).length;
             const warningsFound = diagnostics.slice(initialDiagnosticCount).filter(d => d.severity === 2).length;
             this.metricsCollector.endPhase(ValidationType.SYNTAX, errorsFound, warningsFound);
@@ -295,9 +295,9 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
         if (this.settings.enableSemanticValidation && !this.validationState.isComplete(ValidationType.SEMANTIC)) {
             this.metricsCollector.startPhase(ValidationType.SEMANTIC);
             const initialDiagnosticCount = diagnostics.length;
-            
+
             this.validateSemantics(ast, diagnostics);
-            
+
             const errorsFound = diagnostics.slice(initialDiagnosticCount).filter(d => d.severity === 1).length;
             const warningsFound = diagnostics.slice(initialDiagnosticCount).filter(d => d.severity === 2).length;
             this.metricsCollector.endPhase(ValidationType.SEMANTIC, errorsFound, warningsFound);
@@ -308,9 +308,9 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
         if (this.settings.enableBestPracticeWarnings && !this.validationState.isComplete(ValidationType.BEST_PRACTICE)) {
             this.metricsCollector.startPhase(ValidationType.BEST_PRACTICE);
             const initialDiagnosticCount = diagnostics.length;
-            
+
             this.validateBestPractices(ast, diagnostics);
-            
+
             const errorsFound = diagnostics.slice(initialDiagnosticCount).filter(d => d.severity === 1).length;
             const warningsFound = diagnostics.slice(initialDiagnosticCount).filter(d => d.severity === 2).length;
             this.metricsCollector.endPhase(ValidationType.BEST_PRACTICE, errorsFound, warningsFound);
@@ -321,9 +321,9 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
         if (this.settings.enableSyntaxValidation && !this.validationState.isComplete(ValidationType.MULTILINE_PATTERNS)) {
             this.metricsCollector.startPhase(ValidationType.MULTILINE_PATTERNS);
             const initialDiagnosticCount = diagnostics.length;
-            
+
             this.validateMultiLinePatterns(ast, diagnostics);
-            
+
             const errorsFound = diagnostics.slice(initialDiagnosticCount).filter(d => d.severity === 1).length;
             const warningsFound = diagnostics.slice(initialDiagnosticCount).filter(d => d.severity === 2).length;
             this.metricsCollector.endPhase(ValidationType.MULTILINE_PATTERNS, errorsFound, warningsFound);
@@ -354,37 +354,37 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
      */
     private validateSemantics(ast: DroolsAST, diagnostics: Diagnostic[]): void {
         // Core semantic validations based on official Drools LSP patterns
-        
+
         // 1. Validate package declaration (optional but if present, must be valid)
         this.validatePackageDeclaration(ast, diagnostics);
-        
+
         // 2. Validate import statements
         this.validateImportStatements(ast, diagnostics);
-        
+
         // 3. Check for duplicate rule names (semantic error in Drools)
         this.validateDuplicateRuleNames(ast, diagnostics);
-        
+
         // 4. Check for duplicate function names (semantic error in Drools)
         this.validateDuplicateFunctionNames(ast, diagnostics);
-        
+
         // 5. Check for duplicate global names (semantic error in Drools)
         this.validateDuplicateGlobalNames(ast, diagnostics);
-        
+
         // 6. Validate rule structure according to Drools specification
         this.validateDroolsRuleStructure(ast, diagnostics);
-        
+
         // 7. Validate function structure according to Drools specification
         this.validateDroolsFunctionStructure(ast, diagnostics);
-        
+
         // 8. Validate rule attributes are valid Drools attributes
         this.validateDroolsRuleAttributes(ast, diagnostics);
-        
+
         // 9. Validate global variable declarations
         this.validateGlobalDeclarations(ast, diagnostics);
-        
+
         // 10. Validate syntax patterns and constructs
         this.validateDroolsSyntaxPatterns(ast, diagnostics);
-        
+
         // Variable validation is intentionally disabled due to complexity of Drools variable scoping
         // The official Drools LSP also handles variable scoping carefully to avoid false positives
         // Drools has complex variable scoping rules that require deep understanding of:
@@ -423,7 +423,7 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
      */
     private validateImportStatements(ast: DroolsAST, diagnostics: Diagnostic[]): void {
         const importPaths = new Set<string>();
-        
+
         for (const importNode of ast.imports) {
             // Check for duplicate imports
             if (importPaths.has(importNode.path)) {
@@ -443,11 +443,11 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
             // Validate import path format (including static imports)
             const isStaticImport = importNode.isStatic || importNode.path.startsWith('static ');
             const pathToValidate = isStaticImport ? importNode.path.replace(/^static\s+/, '') : importNode.path;
-            
+
             // Allow both regular imports and static imports - be more lenient with validation
             // Modern Java allows more flexible package naming
             const validImportPattern = /^[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)*(\.\*|(\.[a-zA-Z_][a-zA-Z0-9_]*))?$/;
-            
+
             // Only flag obviously invalid imports, not just strict naming convention violations
             if (importNode.path && !/^[a-zA-Z_][a-zA-Z0-9_\.]*(\*)?$/.test(pathToValidate)) {
                 diagnostics.push({
@@ -470,7 +470,7 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
         for (const rule of ast.rules) {
             // Use enhanced rule name validator
             const nameValidation = this.ruleNameValidator.validateRuleName(rule);
-            
+
             for (const issue of nameValidation.issues) {
                 diagnostics.push({
                     range: {
@@ -616,13 +616,13 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
     private validateRuleAttributesFromText(rule: RuleNode, validAttributes: string[], diagnostics: Diagnostic[]): void {
         const ruleStartLine = rule.range.start.line;
         const ruleEndLine = rule.range.end.line;
-        
+
         // Get only the rule header (before 'when' clause) to avoid false positives
         let ruleHeaderText = '';
         for (let i = ruleStartLine; i <= ruleEndLine && i < this.documentLines.length; i++) {
             const line = this.documentLines[i];
             ruleHeaderText += line + '\n';
-            
+
             // Stop at 'when' clause to avoid checking rule body content
             if (line.trim().startsWith('when')) {
                 break;
@@ -631,7 +631,7 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
 
         // Only look for attributes that are clearly in the rule header area
         // and match the exact Drools attribute syntax patterns
-        
+
         // Pattern for known Drools attributes only - be very specific
         const knownAttributePatterns = [
             /\bsalience\s+(-?\d+)/g,
@@ -649,10 +649,10 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
             /\bcalendars\s+"[^"]*"/g,
             /\benabled\s+(true|false)/g
         ];
-        
+
         // Only validate against these specific patterns to avoid false positives
         // The previous approach was too broad and caught normal rule content
-        
+
         // For now, disable this validation entirely as it's causing too many false positives
         // The parser should handle attribute validation, and if it doesn't, it's better
         // to miss some invalid attributes than to flag valid rule content as invalid
@@ -709,11 +709,11 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
      */
     private validateDuplicateRuleNames(ast: DroolsAST, diagnostics: Diagnostic[]): void {
         const ruleNames = new Map<string, RuleNode>();
-        
+
         for (const rule of ast.rules) {
             if (ruleNames.has(rule.name)) {
                 const firstRule = ruleNames.get(rule.name)!;
-                
+
                 // Add error to the duplicate rule
                 diagnostics.push({
                     severity: DiagnosticSeverity.Error,
@@ -735,11 +735,11 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
      */
     private validateDuplicateFunctionNames(ast: DroolsAST, diagnostics: Diagnostic[]): void {
         const functionNames = new Map<string, FunctionNode>();
-        
+
         for (const func of ast.functions) {
             if (functionNames.has(func.name)) {
                 const firstFunction = functionNames.get(func.name)!;
-                
+
                 diagnostics.push({
                     severity: DiagnosticSeverity.Error,
                     range: {
@@ -760,7 +760,7 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
      */
     private validateDuplicateGlobalNames(ast: DroolsAST, diagnostics: Diagnostic[]): void {
         const globalNames = new Set<string>();
-        
+
         for (const global of ast.globals) {
             if (globalNames.has(global.name)) {
                 diagnostics.push({
@@ -792,11 +792,11 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
         }
 
         // Track variable declarations with their positions
-        const variableDeclarations = new Map<string, Array<{condition: ConditionNode, position: Range}>>();
-        
+        const variableDeclarations = new Map<string, Array<{ condition: ConditionNode, position: Range }>>();
+
         // Collect all variable declarations from the when clause
         this.collectVariableDeclarations(rule.when.conditions, variableDeclarations);
-        
+
         // Check for duplicates
         for (const [variableName, declarations] of variableDeclarations) {
             if (declarations.length > 1) {
@@ -804,7 +804,7 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
                 for (let i = 1; i < declarations.length; i++) {
                     const duplicate = declarations[i];
                     const firstDeclaration = declarations[0];
-                    
+
                     diagnostics.push({
                         severity: DiagnosticSeverity.Error,
                         range: duplicate.position,
@@ -820,8 +820,8 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
      * Recursively collect variable declarations from conditions
      */
     private collectVariableDeclarations(
-        conditions: ConditionNode[], 
-        variableDeclarations: Map<string, Array<{condition: ConditionNode, position: Range}>>
+        conditions: ConditionNode[],
+        variableDeclarations: Map<string, Array<{ condition: ConditionNode, position: Range }>>
     ): void {
         for (const condition of conditions) {
             // Check if this condition declares a variable
@@ -835,7 +835,7 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
                     position: condition.range
                 });
             }
-            
+
             // Also extract variables from condition content using regex
             if (condition.content) {
                 const variableMatches = condition.content.match(/(\$[a-zA-Z_][a-zA-Z0-9_]*)\s*:/g);
@@ -845,13 +845,13 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
                         if (!variableDeclarations.has(variableName)) {
                             variableDeclarations.set(variableName, []);
                         }
-                        
+
                         // Use precise position calculator for accurate positioning
                         const precisePosition = this.positionCalculator.findVariableDeclarationPosition(
-                            { conditions: [condition], range: condition.range } as WhenNode, 
+                            { conditions: [condition], range: condition.range } as WhenNode,
                             variableName
                         );
-                        
+
                         variableDeclarations.get(variableName)!.push({
                             condition: condition,
                             position: precisePosition || condition.range
@@ -859,12 +859,12 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
                     }
                 }
             }
-            
+
             // Recursively check nested conditions (for complex patterns like exists, forall, etc.)
             if (condition.nestedConditions && condition.nestedConditions.length > 0) {
                 this.collectVariableDeclarations(condition.nestedConditions, variableDeclarations);
             }
-            
+
             // Check multi-line pattern inner conditions
             if (condition.multiLinePattern && condition.multiLinePattern.innerConditions) {
                 this.collectVariableDeclarations(condition.multiLinePattern.innerConditions, variableDeclarations);
@@ -972,13 +972,13 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
         }
 
         const actions = thenClause.actions.trim();
-        
+
         // Validate Java syntax in RHS
         this.validateJavaSyntaxInRHS(actions, thenClause, diagnostics);
-        
+
         // Check for missing semicolons in Java statements
         this.validateSemicolonsInRHS(actions, thenClause, diagnostics);
-        
+
         // Check for invalid Drools syntax in RHS (should be Java)
         this.validateNoInvalidDroolsSyntaxInRHS(actions, thenClause, diagnostics);
     }
@@ -989,30 +989,30 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
      */
     private validateJavaSyntaxInRHS(actions: string, thenClause: ThenNode, diagnostics: Diagnostic[]): void {
         const lines = actions.split('\n');
-        
+
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i].trim();
             if (line === '' || line.startsWith('//') || line.startsWith('/*')) continue;
-            
+
             const lineNumber = thenClause.range.start.line + i + 1;
-            
+
             // 1. Java capitalization errors
             this.validateJavaCapitalization(line, lineNumber, diagnostics);
-            
+
             // 2. Java syntax structure validation
             this.validateJavaStatementStructure(line, lineNumber, diagnostics);
-            
+
             // 3. Java method call validation
             this.validateJavaMethodCalls(line, lineNumber, diagnostics);
-            
+
             // 4. Java variable usage validation (allowing $variables from when clause)
             this.validateJavaVariableUsage(line, lineNumber, diagnostics);
-            
+
             // 5. Java string and literal validation
             this.validateJavaLiterals(line, lineNumber, diagnostics);
         }
     }
-    
+
     /**
      * Validate Java capitalization in RHS (then clause only)
      */
@@ -1030,7 +1030,7 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
                 });
             }
         }
-        
+
         // Check for Sytem typo (missing 's')
         if (line.includes('Sytem.out.println')) {
             const position = this.positionCalculator.findJavaErrorPosition(line, 'Sytem', lineNumber);
@@ -1044,7 +1044,7 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
                 });
             }
         }
-        
+
         // Java type capitalization errors - ONLY in variable declarations, NOT in variable names
         // Pattern: looks for "type variableName" but excludes "$variableName" usage
         const javaTypeDeclarationErrors = [
@@ -1054,14 +1054,14 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
             { pattern: /\bdouble\s+[a-zA-Z_][a-zA-Z0-9_]*\s*=/gi, correct: 'Double' },
             { pattern: /\bboolean\s+[a-zA-Z_][a-zA-Z0-9_]*\s*=/gi, correct: 'Boolean' }
         ];
-        
+
         for (const error of javaTypeDeclarationErrors) {
             let match;
             error.pattern.lastIndex = 0; // Reset regex state
             while ((match = error.pattern.exec(line)) !== null) {
                 const typeWord = match[0].split(/\s+/)[0]; // Get just the type word
                 const typeIndex = match.index;
-                
+
                 diagnostics.push({
                     severity: DiagnosticSeverity.Warning,
                     range: {
@@ -1075,22 +1075,22 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
             }
         }
     }
-    
+
     /**
      * Validate Java statement structure
      */
     private validateJavaStatementStructure(line: string, lineNumber: number, diagnostics: Diagnostic[]): void {
         // Check for statements that should end with semicolon
-        const needsSemicolon = /^[^\/\*].*[^;}\s]$/.test(line) && 
-                              !line.includes('{') && 
-                              !line.includes('}') && 
-                              !line.startsWith('if') && 
-                              !line.startsWith('for') && 
-                              !line.startsWith('while') && 
-                              !line.startsWith('try') && 
-                              !line.startsWith('catch') && 
-                              !line.startsWith('finally');
-        
+        const needsSemicolon = /^[^\/\*].*[^;}\s]$/.test(line) &&
+            !line.includes('{') &&
+            !line.includes('}') &&
+            !line.startsWith('if') &&
+            !line.startsWith('for') &&
+            !line.startsWith('while') &&
+            !line.startsWith('try') &&
+            !line.startsWith('catch') &&
+            !line.startsWith('finally');
+
         if (needsSemicolon && (line.includes('=') || line.includes('(') || line.includes('.'))) {
             diagnostics.push({
                 severity: DiagnosticSeverity.Error,
@@ -1103,7 +1103,7 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
                 code: 'missing-semicolon'
             });
         }
-        
+
         // Check for unbalanced parentheses
         const openParens = (line.match(/\(/g) || []).length;
         const closeParens = (line.match(/\)/g) || []).length;
@@ -1120,7 +1120,7 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
             });
         }
     }
-    
+
     /**
      * Validate Java method calls
      */
@@ -1140,7 +1140,7 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
                 code: 'malformed-method-call'
             });
         }
-        
+
         // Check for common method name typos
         const methodTypos = [
             { pattern: /\.printLn\(/g, correct: '.println(' },
@@ -1148,7 +1148,7 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
             { pattern: /\.toStirng\(/g, correct: '.toString(' },
             { pattern: /\.equlas\(/g, correct: '.equals(' }
         ];
-        
+
         for (const typo of methodTypos) {
             typo.pattern.lastIndex = 0;
             while ((match = typo.pattern.exec(line)) !== null) {
@@ -1165,7 +1165,7 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
             }
         }
     }
-    
+
     /**
      * Validate Java variable usage (allowing $variables from when clause)
      */
@@ -1188,7 +1188,7 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
                 });
             }
         }
-        
+
         // Check for bare words that aren't valid Java (but allow $variables)
         if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(line) && !line.startsWith('$')) {
             diagnostics.push({
@@ -1203,7 +1203,7 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
             });
         }
     }
-    
+
     /**
      * Validate Java string literals and other literals
      */
@@ -1211,7 +1211,7 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
         // Check for unmatched quotes
         const singleQuotes = (line.match(/'/g) || []).length;
         const doubleQuotes = (line.match(/"/g) || []).length;
-        
+
         if (singleQuotes % 2 !== 0) {
             diagnostics.push({
                 severity: DiagnosticSeverity.Error,
@@ -1224,7 +1224,7 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
                 code: 'unmatched-quote'
             });
         }
-        
+
         if (doubleQuotes % 2 !== 0) {
             diagnostics.push({
                 severity: DiagnosticSeverity.Error,
@@ -1247,33 +1247,33 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i].trim();
             if (line === '') continue;
-            
+
             // Skip comments and control structures
-            if (line.startsWith('//') || line.startsWith('/*') || 
+            if (line.startsWith('//') || line.startsWith('/*') ||
                 line.startsWith('if') || line.startsWith('for') || line.startsWith('while') ||
                 line.endsWith('{') || line === '}') {
                 continue;
             }
-            
+
             // Check if line looks like a Java statement but missing semicolon
             // But be very lenient for Drools-specific constructs and method calls within modify blocks
             if (this.looksLikeJavaStatement(line) && !line.endsWith(';')) {
                 // Don't flag Drools-specific constructs that don't need semicolons
-                const isDroolsConstruct = line.includes('modify(') || 
-                                        line.includes('insert(') || 
-                                        line.includes('update(') || 
-                                        line.includes('retract(') ||
-                                        line.includes('delete(') ||
-                                        line.trim().endsWith('{') ||
-                                        line.trim().endsWith('}') ||
-                                        line.trim().endsWith(',');
-                
+                const isDroolsConstruct = line.includes('modify(') ||
+                    line.includes('insert(') ||
+                    line.includes('update(') ||
+                    line.includes('retract(') ||
+                    line.includes('delete(') ||
+                    line.trim().endsWith('{') ||
+                    line.trim().endsWith('}') ||
+                    line.trim().endsWith(',');
+
                 // Also don't flag method calls that are inside modify blocks or similar constructs
                 const isMethodCallInBlock = line.trim().match(/^\s*[a-zA-Z_$][a-zA-Z0-9_$]*\s*\(/);
-                
+
                 // Be very conservative - only flag obvious cases where semicolon is clearly missing
                 const isObviouslyMissingSemicolon = line.includes(' = ') && !line.includes('(') && !isDroolsConstruct;
-                
+
                 if (isObviouslyMissingSemicolon) {
                     diagnostics.push({
                         severity: DiagnosticSeverity.Information, // Changed to info
@@ -1295,9 +1295,9 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
     private looksLikeJavaStatement(line: string): boolean {
         // Method calls, assignments, variable declarations, etc.
         return /^[a-zA-Z_$][a-zA-Z0-9_$]*\s*[\.\(]/.test(line) ||  // Method calls like System.out.println
-               /^[a-zA-Z_$][a-zA-Z0-9_$]*\s*=/.test(line) ||        // Assignments
-               /^\$[a-zA-Z_][a-zA-Z0-9_]*\./.test(line) ||          // Variable method calls
-               /^(int|String|boolean|double|float|long)\s+/.test(line); // Variable declarations
+            /^[a-zA-Z_$][a-zA-Z0-9_$]*\s*=/.test(line) ||        // Assignments
+            /^\$[a-zA-Z_][a-zA-Z0-9_]*\./.test(line) ||          // Variable method calls
+            /^(int|String|boolean|double|float|long)\s+/.test(line); // Variable declarations
     }
 
     /**
@@ -1306,7 +1306,7 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
     private validateNoInvalidDroolsSyntaxInRHS(actions: string, thenClause: ThenNode, diagnostics: Diagnostic[]): void {
         // Check for Drools operators that shouldn't be in RHS
         const droolsOperators = ['matches', 'contains', 'memberOf', 'soundslike'];
-        
+
         for (const operator of droolsOperators) {
             if (actions.includes(operator)) {
                 diagnostics.push({
@@ -1331,13 +1331,13 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
         if (!ruleName || ruleName.trim() === '') {
             return true;
         }
-        
+
         // Check for unescaped quotes (which would break parsing)
         // This is the main restriction for quoted rule names
         if (ruleName.includes('"') && !ruleName.includes('\\"')) {
             return true;
         }
-        
+
         // For quoted rule names, Drools is very lenient
         // Allow most characters including special symbols, Unicode, etc.
         // Only restrict truly problematic characters that would break parsing
@@ -1349,23 +1349,23 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
      */
     private findVariablePositionInThenClause(thenClause: ThenNode, variableName: string): Range | null {
         if (!thenClause.actions) return null;
-        
+
         // Get the actual document lines for precise positioning
         const thenStartLine = thenClause.range.start.line + 1; // +1 to skip "then" line
-        
+
         // Search through document lines starting from then clause
         for (let lineIndex = thenStartLine; lineIndex < this.documentLines.length; lineIndex++) {
             const line = this.documentLines[lineIndex];
-            
+
             // Stop if we've reached the end of the rule (\"end\" keyword)
             if (line.trim() === 'end' || line.trim().startsWith('end')) {
                 break;
             }
-            
+
             // Use regex to find the exact variable position as a complete word
             const escapedVariableName = variableName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             const variableRegex = new RegExp('\\b' + escapedVariableName + '\\b', 'g');
-            
+
             let match;
             while ((match = variableRegex.exec(line)) !== null) {
                 // Found the variable, return precise position
@@ -1375,7 +1375,7 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
                 };
             }
         }
-        
+
         return null;
     }
 
@@ -1384,7 +1384,7 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
      */
     private validateConditionSyntax(condition: ConditionNode, diagnostics: Diagnostic[]): void {
         const content = condition.content.trim();
-        
+
         // 1. Check for invalid parentheses sequences like ())() or ))(
         const invalidParenthesesPatterns = [
             /\)\s*\)\s*\(/g,  // ())( with optional spaces
@@ -1393,7 +1393,7 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
             /\)\)\)/g,        // ))) - too many closing
             /\(\(\(/g         // ((( - too many opening
         ];
-        
+
         let parenMatch;
         for (const pattern of invalidParenthesesPatterns) {
             pattern.lastIndex = 0; // Reset regex state
@@ -1410,28 +1410,28 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
                 });
             }
         }
-        
+
         // 2. Check for missing $ prefix in variable declarations
         // Enhanced pattern to catch ALL variable declarations without $ prefix
         // This pattern matches: variableName : FactType anywhere in the content
         const missingDollarPattern = /(?:^|[^$\w])([a-zA-Z_][a-zA-Z0-9_]*)\s*:\s*[A-Z][a-zA-Z0-9_]*\s*\(/g;
-        
+
         let match;
         while ((match = missingDollarPattern.exec(content)) !== null) {
             const variableName = match[1];
-            
+
             // Skip if this is actually a valid Java construct (like labels)
             // In Drools LHS, all variable bindings MUST start with $
             const beforeMatch = content.substring(0, match.index);
             const isInJavaContext = beforeMatch.includes('//') || beforeMatch.includes('/*');
-            
+
             if (!isInJavaContext) {
                 // Use precise position calculator for accurate positioning
                 const precisePosition = this.positionCalculator.findVariableDeclarationPosition(
                     { conditions: [condition], range: condition.range } as WhenNode,
                     variableName
                 );
-                
+
                 if (precisePosition) {
                     diagnostics.push({
                         severity: DiagnosticSeverity.Error,
@@ -1439,161 +1439,162 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
                         message: `Variable "${variableName}" must start with $ prefix. In Drools LHS, all variables must use $ prefix: $${variableName}`,
                         source: 'drools-syntax',
                         code: 'missing-dollar-prefix'
-                });
+                    });
+                }
             }
-        }
-        
-        // 3. Check for unbalanced parentheses
-        const openParens = (content.match(/\(/g) || []).length;
-        const closeParens = (content.match(/\)/g) || []).length;
-        if (openParens !== closeParens) {
-            diagnostics.push({
-                severity: DiagnosticSeverity.Error,
-                range: {
-                    start: { line: condition.range.start.line, character: condition.range.start.character },
-                    end: { line: condition.range.end.line, character: condition.range.end.character }
-                },
-                message: `Unbalanced parentheses: ${openParens} opening, ${closeParens} closing. Check for missing or extra parentheses.`,
-                source: 'drools-syntax',
-                code: 'unbalanced-parentheses'
-            });
-        }
-        
-        // 4. Check for malformed variable declarations with spaces
-        const malformedVariablePattern = /\$[a-zA-Z_][a-zA-Z0-9_]*\s+[a-zA-Z_][a-zA-Z0-9_]*\s*:/g;
-        while ((match = malformedVariablePattern.exec(content)) !== null) {
-            diagnostics.push({
-                severity: DiagnosticSeverity.Error,
-                range: {
-                    start: { line: condition.range.start.line, character: condition.range.start.character },
-                    end: { line: condition.range.end.line, character: condition.range.end.character }
-                },
-                message: 'Variable names cannot contain spaces. Use camelCase or underscores instead.',
-                source: 'drools-syntax'
-            });
-        }
 
-        // Check for malformed fact type names with spaces
-        const malformedFactTypePattern = /:\s*[A-Z][a-zA-Z0-9_]*\s+[a-zA-Z0-9_]+\s*\(/g;
-        while ((match = malformedFactTypePattern.exec(content)) !== null) {
-            diagnostics.push({
-                severity: DiagnosticSeverity.Error,
-                range: {
-                    start: { line: condition.range.start.line, character: condition.range.start.character },
-                    end: { line: condition.range.end.line, character: condition.range.end.character }
-                },
-                message: 'Fact type names cannot contain spaces. Use camelCase instead.',
-                source: 'drools-semantic'
-            });
-        }
-
-        // Check for invalid variable name patterns (starting with numbers, containing invalid chars)
-        const invalidVariablePattern = /\$[0-9][a-zA-Z0-9_]*|[\$][a-zA-Z_][a-zA-Z0-9_]*[^a-zA-Z0-9_\s:]/g;
-        while ((match = invalidVariablePattern.exec(content)) !== null) {
-            const varName = match[0];
-            if (varName.match(/\$[0-9]/)) {
+            // 3. Check for unbalanced parentheses
+            const openParens = (content.match(/\(/g) || []).length;
+            const closeParens = (content.match(/\)/g) || []).length;
+            if (openParens !== closeParens) {
                 diagnostics.push({
                     severity: DiagnosticSeverity.Error,
                     range: {
                         start: { line: condition.range.start.line, character: condition.range.start.character },
                         end: { line: condition.range.end.line, character: condition.range.end.character }
                     },
-                    message: `Variable name "${varName}" cannot start with a number.`,
-                    source: 'drools-semantic'
+                    message: `Unbalanced parentheses: ${openParens} opening, ${closeParens} closing. Check for missing or extra parentheses.`,
+                    source: 'drools-syntax',
+                    code: 'unbalanced-parentheses'
                 });
             }
-        }
 
-        // Check for invalid semicolons in LHS (when clause)
-        // Semicolons are generally not allowed in Drools LHS conditions
-        // BUT they can appear in accumulate patterns and other complex constructs
-        if (content.includes(';')) {
-            // Don't flag semicolons in accumulate patterns or other complex constructs
-            const isInAccumulate = content.includes('accumulate(') || content.includes('accumulate ');
-            const isInComplexPattern = content.includes('forall(') || content.includes('exists(') || content.includes('eval(');
-            
-            if (!isInAccumulate && !isInComplexPattern) {
-                // Use precise position calculator for semicolon positioning
-                const semicolonPosition = this.positionCalculator.findJavaErrorPosition(content, ';', condition.range.start.line);
-                const fallbackRange = {
-                    start: { line: condition.range.start.line, character: condition.range.start.character },
-                    end: { line: condition.range.start.line, character: condition.range.start.character + 1 }
-                };
-                
-                diagnostics.push({
-                    severity: DiagnosticSeverity.Warning, // Changed to warning
-                    range: semicolonPosition || fallbackRange,
-                    message: 'Semicolons are generally not allowed in when clause conditions. Check if this is correct.',
-                    source: 'drools-semantic'
-                });
-            }
-        }
-
-        // Check for missing colons in variable declarations
-        const missingColonPattern = /\$[a-zA-Z_][a-zA-Z0-9_]*\s+[A-Z][a-zA-Z0-9_]*\s*\(/g;
-        while ((match = missingColonPattern.exec(content)) !== null) {
-            diagnostics.push({
-                severity: DiagnosticSeverity.Error,
-                range: {
-                    start: { line: condition.range.start.line, character: condition.range.start.character },
-                    end: { line: condition.range.end.line, character: condition.range.end.character }
-                },
-                message: 'Missing colon (:) in variable declaration. Use format: $variable : FactType()',
-                source: 'drools-semantic'
-            });
-        }
-
-        // Check for invalid bare words in LHS (should be proper Drools patterns)
-        if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(content.trim())) {
-            diagnostics.push({
-                severity: DiagnosticSeverity.Error,
-                range: {
-                    start: { line: condition.range.start.line, character: condition.range.start.character },
-                    end: { line: condition.range.end.line, character: condition.range.end.character }
-                },
-                message: `Invalid condition syntax: "${content.trim()}". LHS must contain proper Drools pattern syntax like: $variable : FactType() or eval(...).`,
-                source: 'drools-semantic'
-            });
-        }
-
-        // Check for missing proper pattern structure
-        // Disabled this validation as it's too broad and causes false positives
-        // Drools has many valid pattern syntaxes that this check doesn't account for
-        // The parser should handle basic syntax validation
-        
-        // Only flag obviously invalid patterns, not complex valid ones
-        if (content.trim() && content.trim().length > 0) {
-            // Only flag patterns that are clearly malformed, not just different from expected format
-            const isClearlyInvalid = content.includes(':::') || // Triple colon is clearly wrong
-                                   content.includes('$$') ||    // Double dollar is wrong
-                                   /^\s*[{}]\s*$/.test(content); // Just braces alone
-            
-            if (isClearlyInvalid) {
+            // 4. Check for malformed variable declarations with spaces
+            const malformedVariablePattern = /\$[a-zA-Z_][a-zA-Z0-9_]*\s+[a-zA-Z_][a-zA-Z0-9_]*\s*:/g;
+            while ((match = malformedVariablePattern.exec(content)) !== null) {
                 diagnostics.push({
                     severity: DiagnosticSeverity.Error,
                     range: {
                         start: { line: condition.range.start.line, character: condition.range.start.character },
                         end: { line: condition.range.end.line, character: condition.range.end.character }
                     },
-                    message: 'Invalid condition syntax detected.',
+                    message: 'Variable names cannot contain spaces. Use camelCase or underscores instead.',
+                    source: 'drools-syntax'
+                });
+            }
+
+            // Check for malformed fact type names with spaces
+            const malformedFactTypePattern = /:\s*[A-Z][a-zA-Z0-9_]*\s+[a-zA-Z0-9_]+\s*\(/g;
+            while ((match = malformedFactTypePattern.exec(content)) !== null) {
+                diagnostics.push({
+                    severity: DiagnosticSeverity.Error,
+                    range: {
+                        start: { line: condition.range.start.line, character: condition.range.start.character },
+                        end: { line: condition.range.end.line, character: condition.range.end.character }
+                    },
+                    message: 'Fact type names cannot contain spaces. Use camelCase instead.',
                     source: 'drools-semantic'
                 });
             }
-        }
 
-        // Check for double colon syntax error (:: should be :)
-        const doubleColonPattern = /\$[a-zA-Z_][a-zA-Z0-9_]*\s*::\s*/g;
-        let match;
-        while ((match = doubleColonPattern.exec(content)) !== null) {
-            diagnostics.push({
-                severity: DiagnosticSeverity.Error,
-                range: {
-                    start: { line: condition.range.start.line, character: condition.range.start.character },
-                    end: { line: condition.range.end.line, character: condition.range.end.character }
-                },
-                message: 'Invalid double colon (::) in variable declaration. Use single colon (:) instead. Correct format: $variable : FactType()',
-                source: 'drools-semantic'
-            });
+            // Check for invalid variable name patterns (starting with numbers, containing invalid chars)
+            const invalidVariablePattern = /\$[0-9][a-zA-Z0-9_]*|[\$][a-zA-Z_][a-zA-Z0-9_]*[^a-zA-Z0-9_\s:]/g;
+            while ((match = invalidVariablePattern.exec(content)) !== null) {
+                const varName = match[0];
+                if (varName.match(/\$[0-9]/)) {
+                    diagnostics.push({
+                        severity: DiagnosticSeverity.Error,
+                        range: {
+                            start: { line: condition.range.start.line, character: condition.range.start.character },
+                            end: { line: condition.range.end.line, character: condition.range.end.character }
+                        },
+                        message: `Variable name "${varName}" cannot start with a number.`,
+                        source: 'drools-semantic'
+                    });
+                }
+            }
+
+            // Check for invalid semicolons in LHS (when clause)
+            // Semicolons are generally not allowed in Drools LHS conditions
+            // BUT they can appear in accumulate patterns and other complex constructs
+            if (content.includes(';')) {
+                // Don't flag semicolons in accumulate patterns or other complex constructs
+                const isInAccumulate = content.includes('accumulate(') || content.includes('accumulate ');
+                const isInComplexPattern = content.includes('forall(') || content.includes('exists(') || content.includes('eval(');
+
+                if (!isInAccumulate && !isInComplexPattern) {
+                    // Use precise position calculator for semicolon positioning
+                    const semicolonPosition = this.positionCalculator.findJavaErrorPosition(content, ';', condition.range.start.line);
+                    const fallbackRange = {
+                        start: { line: condition.range.start.line, character: condition.range.start.character },
+                        end: { line: condition.range.start.line, character: condition.range.start.character + 1 }
+                    };
+
+                    diagnostics.push({
+                        severity: DiagnosticSeverity.Warning, // Changed to warning
+                        range: semicolonPosition || fallbackRange,
+                        message: 'Semicolons are generally not allowed in when clause conditions. Check if this is correct.',
+                        source: 'drools-semantic'
+                    });
+                }
+            }
+
+            // Check for missing colons in variable declarations
+            const missingColonPattern = /\$[a-zA-Z_][a-zA-Z0-9_]*\s+[A-Z][a-zA-Z0-9_]*\s*\(/g;
+            while ((match = missingColonPattern.exec(content)) !== null) {
+                diagnostics.push({
+                    severity: DiagnosticSeverity.Error,
+                    range: {
+                        start: { line: condition.range.start.line, character: condition.range.start.character },
+                        end: { line: condition.range.end.line, character: condition.range.end.character }
+                    },
+                    message: 'Missing colon (:) in variable declaration. Use format: $variable : FactType()',
+                    source: 'drools-semantic'
+                });
+            }
+
+            // Check for invalid bare words in LHS (should be proper Drools patterns)
+            if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(content.trim())) {
+                diagnostics.push({
+                    severity: DiagnosticSeverity.Error,
+                    range: {
+                        start: { line: condition.range.start.line, character: condition.range.start.character },
+                        end: { line: condition.range.end.line, character: condition.range.end.character }
+                    },
+                    message: `Invalid condition syntax: "${content.trim()}". LHS must contain proper Drools pattern syntax like: $variable : FactType() or eval(...).`,
+                    source: 'drools-semantic'
+                });
+            }
+
+            // Check for missing proper pattern structure
+            // Disabled this validation as it's too broad and causes false positives
+            // Drools has many valid pattern syntaxes that this check doesn't account for
+            // The parser should handle basic syntax validation
+
+            // Only flag obviously invalid patterns, not complex valid ones
+            if (content.trim() && content.trim().length > 0) {
+                // Only flag patterns that are clearly malformed, not just different from expected format
+                const isClearlyInvalid = content.includes(':::') || // Triple colon is clearly wrong
+                    content.includes('$$') ||    // Double dollar is wrong
+                    /^\s*[{}]\s*$/.test(content); // Just braces alone
+
+                if (isClearlyInvalid) {
+                    diagnostics.push({
+                        severity: DiagnosticSeverity.Error,
+                        range: {
+                            start: { line: condition.range.start.line, character: condition.range.start.character },
+                            end: { line: condition.range.end.line, character: condition.range.end.character }
+                        },
+                        message: 'Invalid condition syntax detected.',
+                        source: 'drools-semantic'
+                    });
+                }
+            }
+
+            // Check for double colon syntax error (:: should be :)
+            const doubleColonPattern = /\$[a-zA-Z_][a-zA-Z0-9_]*\s*::\s*/g;
+            let doubleColonMatch;
+            while ((doubleColonMatch = doubleColonPattern.exec(content)) !== null) {
+                diagnostics.push({
+                    severity: DiagnosticSeverity.Error,
+                    range: {
+                        start: { line: condition.range.start.line, character: condition.range.start.character },
+                        end: { line: condition.range.end.line, character: condition.range.end.character }
+                    },
+                    message: 'Invalid double colon (::) in variable declaration. Use single colon (:) instead. Correct format: $variable : FactType()',
+                    source: 'drools-semantic'
+                });
+            }
         }
     }
 
@@ -1608,12 +1609,12 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
         // Extract variables declared in LHS (when clause) and check for duplicates
         const declaredVariables = new Set<string>();
         const variableDeclarations = new Map<string, ConditionNode[]>();
-        
+
         // Get variables from parsed conditions
         for (const condition of rule.when.conditions) {
             if (condition.variable) {
                 declaredVariables.add(condition.variable);
-                
+
                 // Track where each variable is declared for duplicate detection
                 if (!variableDeclarations.has(condition.variable)) {
                     variableDeclarations.set(condition.variable, []);
@@ -1625,7 +1626,7 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
                 if (variableMatches) {
                     for (const variable of variableMatches) {
                         declaredVariables.add(variable);
-                        
+
                         // Track for duplicate detection
                         if (!variableDeclarations.has(variable)) {
                             variableDeclarations.set(variable, []);
@@ -1635,7 +1636,7 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
                 }
             }
         }
-        
+
         // Check for duplicate variable declarations
         this.checkForDuplicateVariables(variableDeclarations, diagnostics);
 
@@ -1656,12 +1657,12 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
                 // Check if this might be a global variable, function parameter, or built-in
                 const isBuiltIn = ['drools', 'kcontext'].includes(usedVariable.replace('$', ''));
                 const isGlobal = usedVariable.match(/^[a-zA-Z][a-zA-Z0-9]*$/); // No $ prefix for globals
-                
+
                 // Skip built-ins and globals
                 if (!isBuiltIn && !isGlobal && usedVariable.startsWith('$')) {
                     // Find the specific position of the undefined variable in the then clause
                     const variablePosition = this.findVariablePositionInThenClause(rule.then, usedVariable);
-                    
+
                     diagnostics.push({
                         severity: DiagnosticSeverity.Error,
                         range: variablePosition || {
@@ -1682,7 +1683,7 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
             if (!usedVariables.has(declaredVariable)) {
                 // Find the precise position of the unused variable declaration
                 const variablePosition = this.findVariableDeclarationPosition(rule.when, declaredVariable);
-                
+
                 diagnostics.push({
                     severity: DiagnosticSeverity.Information,
                     range: variablePosition || {
@@ -1781,7 +1782,7 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
 
             // Collect declared variables from when clause (including nested patterns)
             const declaredVariables = new Set<string>();
-            
+
             // Primary method: collect from AST conditions
             this.collectVariablesFromConditions(rule.when.conditions, declaredVariables);
 
@@ -1809,7 +1810,7 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
                 if (!declaredVariables.has(usedVar)) {
                     // Use precise position calculator for accurate positioning
                     const precisePosition = this.positionCalculator.findVariablePositionInThenClause(rule.then, usedVar);
-                    
+
                     diagnostics.push({
                         severity: DiagnosticSeverity.Error,
                         range: precisePosition || {
@@ -1870,7 +1871,7 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
         // Matches patterns like: $variable : FactType(...) or $var : Type
         const variableDeclarationRegex = /\$[a-zA-Z_][a-zA-Z0-9_]*\s*:\s*[a-zA-Z_][a-zA-Z0-9_.]*/g;
         const matches = content.match(variableDeclarationRegex);
-        
+
         if (matches) {
             for (const match of matches) {
                 const variable = match.split(':')[0].trim();
@@ -1883,7 +1884,7 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
         // Also look for simple variable bindings without explicit type
         const simpleVariableRegex = /\$[a-zA-Z_][a-zA-Z0-9_]*(?=\s*[=:])/g;
         const simpleMatches = content.match(simpleVariableRegex);
-        
+
         if (simpleMatches) {
             for (const variable of simpleMatches) {
                 declaredVariables.add(variable.trim());
@@ -1901,12 +1902,12 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
 
         const startLine = rule.when.range.start.line;
         const endLine = rule.when.range.end.line;
-        
+
         let content = '';
         for (let i = startLine; i <= endLine && i < this.documentLines.length; i++) {
             content += this.documentLines[i] + '\n';
         }
-        
+
         return content;
     }
 
@@ -1917,7 +1918,7 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
         // Pattern to match variable declarations: $variableName : FactType
         const variableDeclarationRegex = /\$([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g;
         let match;
-        
+
         while ((match = variableDeclarationRegex.exec(text)) !== null) {
             declaredVariables.add('$' + match[1]);
         }
@@ -1926,7 +1927,7 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
         // This handles cases like: $var = someExpression
         const simpleVariableRegex = /\$([a-zA-Z_][a-zA-Z0-9_]*)\s*=/g;
         let simpleMatch;
-        
+
         while ((simpleMatch = simpleVariableRegex.exec(text)) !== null) {
             declaredVariables.add('$' + simpleMatch[1]);
         }
@@ -1938,12 +1939,12 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
     private getRuleContent(rule: RuleNode): string {
         const startLine = rule.range.start.line;
         const endLine = rule.range.end.line;
-        
+
         let content = '';
         for (let i = startLine; i <= endLine && i < this.documentLines.length; i++) {
             content += this.documentLines[i] + '\n';
         }
-        
+
         return content;
     }
 
@@ -2033,10 +2034,10 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
     private validateSyntaxDetails(ast: DroolsAST, diagnostics: Diagnostic[]): void {
         // Check for missing semicolons in specific contexts
         this.validateMissingSemicolons(ast, diagnostics);
-        
+
         // Check for unmatched brackets (enhanced multi-line support)
         this.validateBracketMatching(diagnostics);
-        
+
         // Check for malformed rule names
         this.validateRuleNames(ast, diagnostics);
     }
@@ -2047,10 +2048,10 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
     private validateMissingSemicolons(ast: DroolsAST, diagnostics: Diagnostic[]): void {
         // Modern Drools (7+) does not require semicolons for package, import, and global declarations
         // Semicolon warnings are disabled to match modern Drools syntax conventions
-        
+
         // Only validate semicolons in contexts where they are actually required
         // (e.g., within rule actions where Java syntax applies)
-        
+
         // Note: This method is intentionally left mostly empty to avoid false positives
         // with modern Drools syntax that doesn't require semicolons for top-level declarations
     }
@@ -2066,7 +2067,7 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
         ];
 
         const fullText = this.document.getText();
-        
+
         for (const pair of bracketPairs) {
             this.validateBracketPair(pair.open, pair.close, fullText, diagnostics);
         }
@@ -2078,7 +2079,7 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
     private validateBracketPair(openBracket: string, closeBracket: string, text: string, diagnostics: Diagnostic[]): void {
         const stack: Array<{ line: number; character: number }> = [];
         const lines = text.split('\n');
-        
+
         for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
             const line = lines[lineIndex];
             let inStringLiteral = false;
@@ -2086,22 +2087,22 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
             let inLineComment = false;
             let inBlockComment = false;
             let escapeNext = false;
-            
+
             for (let charIndex = 0; charIndex < line.length; charIndex++) {
                 const char = line[charIndex];
                 const nextChar = charIndex < line.length - 1 ? line[charIndex + 1] : '';
-                
+
                 // Handle escape sequences
                 if (escapeNext) {
                     escapeNext = false;
                     continue;
                 }
-                
+
                 if (char === '\\' && (inStringLiteral || inCharLiteral)) {
                     escapeNext = true;
                     continue;
                 }
-                
+
                 // Handle comments
                 if (!inStringLiteral && !inCharLiteral) {
                     if (char === '/' && nextChar === '/') {
@@ -2109,42 +2110,42 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
                         charIndex++; // Skip next character
                         continue;
                     }
-                    
+
                     if (char === '/' && nextChar === '*') {
                         inBlockComment = true;
                         charIndex++; // Skip next character
                         continue;
                     }
-                    
+
                     if (inBlockComment && char === '*' && nextChar === '/') {
                         inBlockComment = false;
                         charIndex++; // Skip next character
                         continue;
                     }
                 }
-                
+
                 // Skip if we're in a comment
                 if (inLineComment || inBlockComment) {
                     continue;
                 }
-                
+
                 // Handle string literals
                 if (char === '"' && !inCharLiteral) {
                     inStringLiteral = !inStringLiteral;
                     continue;
                 }
-                
+
                 // Handle character literals
                 if (char === "'" && !inStringLiteral) {
                     inCharLiteral = !inCharLiteral;
                     continue;
                 }
-                
+
                 // Skip if we're in a string or character literal
                 if (inStringLiteral || inCharLiteral) {
                     continue;
                 }
-                
+
                 // Check for brackets
                 if (char === openBracket) {
                     stack.push({ line: lineIndex, character: charIndex });
@@ -2165,11 +2166,11 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
                     }
                 }
             }
-            
+
             // Reset line comment flag at end of line
             inLineComment = false;
         }
-        
+
         // Report unmatched opening brackets
         for (const bracket of stack) {
             diagnostics.push({
@@ -2259,7 +2260,7 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
         // Check if pattern is incomplete - but be more lenient for complex patterns
         // as they often have complex nested structures that the parser might not fully understand
         const complexPatterns = ['accumulate', 'collect', 'from', 'not', 'exists', 'forall'];
-        
+
         if (!pattern.isComplete && !complexPatterns.includes(pattern.keyword)) {
             diagnostics.push({
                 severity: DiagnosticSeverity.Error,
@@ -2271,14 +2272,14 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
                 source: 'drools-multiline'
             });
         }
-        
+
         // For complex patterns (accumulate, collect, from), only flag as incomplete if obviously malformed
         if (!pattern.isComplete && complexPatterns.includes(pattern.keyword)) {
             // Only flag if the pattern content is clearly incomplete (e.g., just "accumulate(" or "collect(")
-            const isObviouslyIncomplete = pattern.content && 
+            const isObviouslyIncomplete = pattern.content &&
                 (pattern.content.trim().endsWith(`${pattern.keyword}(`) ||
-                 pattern.content.trim() === pattern.keyword);
-            
+                    pattern.content.trim() === pattern.keyword);
+
             if (isObviouslyIncomplete) {
                 diagnostics.push({
                     severity: DiagnosticSeverity.Error,
@@ -2343,14 +2344,14 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
         // Check for unmatched parentheses - but be very lenient for complex patterns
         // Only flag obvious mismatches, not complex multi-line patterns that might span conditions
         const mismatch = Math.abs(openParens.length - closeParens.length);
-        
+
         // Only flag if there's a significant mismatch (more than 2) to avoid false positives
         // Complex Drools patterns often have parentheses that span multiple parsed conditions
         if (mismatch > 2) {
             if (openParens.length > closeParens.length) {
                 const unmatchedCount = openParens.length - closeParens.length;
                 const lastOpen = openParens[openParens.length - 1];
-                
+
                 diagnostics.push({
                     severity: DiagnosticSeverity.Warning, // Changed to warning
                     range: {
@@ -2365,7 +2366,7 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
             if (closeParens.length > openParens.length) {
                 const unmatchedCount = closeParens.length - openParens.length;
                 const firstClose = closeParens[0];
-                
+
                 diagnostics.push({
                     severity: DiagnosticSeverity.Warning, // Changed to warning
                     range: {
@@ -2429,25 +2430,25 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
             // 1. Built-in functions: sum(), count(), avg(), min(), max(), etc.
             // 2. Custom functions with init:, action:, result: clauses
             // 3. Other valid accumulate patterns that we might not recognize
-            
+
             const hasBuiltInFunction = /\b(sum|count|avg|average|min|max|collectList|collectSet|variance|standardDeviation)\s*\(/.test(content);
-            
+
             // Be more flexible with custom clause detection - look for any of the keywords
             const hasInitClause = /\binit\s*\(/.test(content) || content.includes('init:');
             const hasActionClause = /\baction\s*\(/.test(content) || content.includes('action:');
             const hasResultClause = /\bresult\s*\(/.test(content) || content.includes('result:');
             const hasCustomClauses = hasInitClause && hasActionClause && hasResultClause;
-            
+
             // Also check for other valid accumulate patterns
             const hasFromClause = content.includes('from ');
             const hasValidPattern = hasBuiltInFunction || hasCustomClauses || hasFromClause;
-            
+
             // Only flag if it's clearly an invalid accumulate pattern
             if (!hasValidPattern && content.length > pattern.keyword.length + 2) {
                 // But be very conservative - only flag obvious errors
-                const isObviouslyInvalid = content.trim() === `${pattern.keyword}()` || 
-                                         content.trim() === pattern.keyword;
-                
+                const isObviouslyInvalid = content.trim() === `${pattern.keyword}()` ||
+                    content.trim() === pattern.keyword;
+
                 if (isObviouslyInvalid) {
                     diagnostics.push({
                         severity: DiagnosticSeverity.Warning, // Changed to warning
@@ -2508,7 +2509,7 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
             // Check for patterns that end abruptly
             if (condition.content) {
                 const trimmed = condition.content.trim();
-                
+
                 // Check for incomplete exists/not/eval patterns
                 const incompletePatterns = [
                     { keyword: 'exists', regex: /exists\s*\(\s*$/ },
@@ -2536,7 +2537,7 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
                 // Check for patterns with unbalanced parentheses
                 const openCount = (trimmed.match(/\(/g) || []).length;
                 const closeCount = (trimmed.match(/\)/g) || []).length;
-                
+
                 if (openCount > closeCount) {
                     const missingCount = openCount - closeCount;
                     diagnostics.push({
@@ -2564,7 +2565,7 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
     public provideDiagnosticsWithRecovery(document: TextDocument, ast: DroolsAST, parseErrors: ParseError[]): Diagnostic[] {
         this.document = document;
         this.documentLines = document.getText().split('\n');
-        
+
         const diagnostics: Diagnostic[] = [];
 
         // Convert parser errors to diagnostics
@@ -2712,22 +2713,22 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
      */
     private validateDroolsSyntaxPatterns(ast: DroolsAST, diagnostics: Diagnostic[]): void {
         // Validate syntax patterns based on official Drools LSP implementation
-        
+
         for (const rule of ast.rules) {
             if (rule.when) {
                 this.validateWhenClausePatternSyntax(rule.when, diagnostics);
             }
-            
+
             if (rule.then) {
                 this.validateActionSyntax(rule.then, diagnostics);
             }
         }
-        
+
         // Validate query syntax patterns
         for (const query of ast.queries) {
             this.validateQuerySyntax(query, diagnostics);
         }
-        
+
         // Validate declare syntax patterns
         for (const declare of ast.declares) {
             this.validateDeclareSyntax(declare, diagnostics);
@@ -2743,7 +2744,7 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
             if (condition.isMultiLine) {
                 this.validateMultiLinePatternSyntax(condition, diagnostics);
             }
-            
+
             // Validate constraint syntax
             if (condition.constraints) {
                 for (const constraint of condition.constraints) {
@@ -2759,13 +2760,13 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
     private validateMultiLinePatternSyntax(condition: ConditionNode, diagnostics: Diagnostic[]): void {
         const validPatternTypes = ['exists', 'not', 'eval', 'forall', 'collect', 'accumulate'];
         const validBasicPatternTypes = ['pattern', 'constraint']; // Basic Drools patterns
-        
+
         // Only validate if this is actually a multi-line pattern
         // Basic patterns like "$var : Type()" should not be restricted
-        if (condition.conditionType && 
-            !validPatternTypes.includes(condition.conditionType) && 
+        if (condition.conditionType &&
+            !validPatternTypes.includes(condition.conditionType) &&
             !validBasicPatternTypes.includes(condition.conditionType)) {
-            
+
             diagnostics.push({
                 severity: DiagnosticSeverity.Error,
                 range: {
@@ -2784,7 +2785,7 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
     private validateConstraintSyntax(constraint: any, diagnostics: Diagnostic[]): void {
         // Validate operator syntax
         const validOperators = ['==', '!=', '<', '>', '<=', '>=', 'matches', 'contains', 'memberOf', 'soundslike', 'in'];
-        
+
         if (constraint.operator && !validOperators.includes(constraint.operator)) {
             diagnostics.push({
                 severity: DiagnosticSeverity.Warning,
@@ -2803,7 +2804,7 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
      */
     private validateActionSyntax(thenClause: ThenNode, diagnostics: Diagnostic[]): void {
         const actions = thenClause.actions;
-        
+
         // Check for common action patterns
         const actionPatterns = [
             { pattern: /insert\s*\(/g, name: 'insert' },
@@ -2812,14 +2813,14 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
             { pattern: /retract\s*\(/g, name: 'retract' },
             { pattern: /delete\s*\(/g, name: 'delete' }
         ];
-        
+
         for (const actionPattern of actionPatterns) {
             const matches = actions.match(actionPattern.pattern);
             if (matches) {
                 // Validate that actions have proper syntax (basic check)
                 const actionRegex = new RegExp(`${actionPattern.name}\\s*\\([^)]*\\)`, 'g');
                 const properMatches = actions.match(actionRegex);
-                
+
                 if (!properMatches || properMatches.length !== matches.length) {
                     diagnostics.push({
                         severity: DiagnosticSeverity.Warning,
@@ -2869,7 +2870,7 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
                 source: 'drools-syntax'
             });
         }
-        
+
         // Validate field syntax
         if (declare.fields) {
             for (const field of declare.fields) {
@@ -2884,7 +2885,7 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
                         source: 'drools-syntax'
                     });
                 }
-                
+
                 if (!field.dataType || field.dataType.trim() === '') {
                     diagnostics.push({
                         severity: DiagnosticSeverity.Error,
@@ -2908,32 +2909,32 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
             // Core language keywords
             'rule', 'when', 'then', 'end', 'function', 'import', 'package', 'global',
             'query', 'declare', 'extends', 'template', 'unit',
-            
+
             // Rule attributes
             'salience', 'no-loop', 'agenda-group', 'auto-focus', 'activation-group',
             'ruleflow-group', 'lock-on-active', 'dialect', 'date-effective', 'date-expires',
             'duration', 'timer', 'calendars', 'enabled',
-            
+
             // Pattern matching keywords
             'exists', 'not', 'and', 'or', 'eval', 'forall', 'collect', 'accumulate',
             'from', 'entry-point', 'over', 'window', 'length', 'time',
-            
+
             // Operators and functions
             'matches', 'contains', 'memberOf', 'soundslike', 'str', 'in',
             'init', 'action', 'reverse', 'result',
-            
+
             // Actions
             'insert', 'update', 'modify', 'delete', 'retract',
-            
+
             // Types and modifiers
             'static', 'final', 'abstract', 'public', 'private', 'protected',
-            
+
             // Common Java keywords that are valid in Drools
             'if', 'else', 'for', 'while', 'do', 'switch', 'case', 'default',
             'try', 'catch', 'finally', 'throw', 'throws', 'return', 'break', 'continue',
             'new', 'this', 'super', 'null', 'true', 'false',
             'class', 'interface', 'enum', 'instanceof', 'synchronized', 'volatile', 'transient',
-            
+
             // Primitive types
             'boolean', 'byte', 'char', 'short', 'int', 'long', 'float', 'double', 'void'
         ]);
@@ -2943,36 +2944,36 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
 
         for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
             const line = lines[lineIndex];
-            
+
             // Skip comments and strings
             const cleanLine = this.removeCommentsAndStrings(line);
-            
+
             // Find potential keywords (word boundaries)
             const wordRegex = /\b[a-zA-Z_][a-zA-Z0-9_]*\b/g;
             let match;
-            
+
             while ((match = wordRegex.exec(cleanLine)) !== null) {
                 const word = match[0];
                 const startChar = match.index;
-                
+
                 // Skip if it's a valid Drools keyword
                 if (validDroolsKeywords.has(word)) {
                     continue;
                 }
-                
+
                 // Skip if it's likely a variable, fact type, or method name
                 if (this.isLikelyValidIdentifier(word, cleanLine, startChar)) {
                     continue;
                 }
-                
+
                 // Skip if it's in a context where custom identifiers are expected
                 if (this.isInValidContext(cleanLine, startChar)) {
                     continue;
                 }
-                
+
                 // Skip common Java identifiers that are valid in Drools context
                 // Disabled to reduce false positives - most identifiers are valid in Drools context
-                
+
                 // If we reach here, it might be an invalid keyword
                 // But we need to be very conservative to avoid false positives
                 if (this.looksLikeInvalidKeyword(word, cleanLine, startChar)) {
@@ -3002,11 +3003,11 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
         let inLineComment = false;
         let inBlockComment = false;
         let escapeNext = false;
-        
+
         for (let i = 0; i < line.length; i++) {
             const char = line[i];
             const nextChar = i < line.length - 1 ? line[i + 1] : '';
-            
+
             if (escapeNext) {
                 escapeNext = false;
                 if (inString || inChar) {
@@ -3014,13 +3015,13 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
                 }
                 continue;
             }
-            
+
             if (char === '\\' && (inString || inChar)) {
                 escapeNext = true;
                 result += ' ';
                 continue;
             }
-            
+
             if (!inString && !inChar && !inLineComment && !inBlockComment) {
                 if (char === '/' && nextChar === '/') {
                     inLineComment = true;
@@ -3042,33 +3043,33 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
                     continue;
                 }
             }
-            
+
             if (inString && char === '"') {
                 inString = false;
                 result += ' ';
                 continue;
             }
-            
+
             if (inChar && char === "'") {
                 inChar = false;
                 result += ' ';
                 continue;
             }
-            
+
             if (inBlockComment && char === '*' && nextChar === '/') {
                 inBlockComment = false;
                 result += '  ';
                 i++; // Skip next character
                 continue;
             }
-            
+
             if (inString || inChar || inLineComment || inBlockComment) {
                 result += ' '; // Replace with space to maintain positions
             } else {
                 result += char;
             }
         }
-        
+
         return result;
     }
 
@@ -3080,29 +3081,29 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
         if (startChar > 0 && line[startChar - 1] === '$') {
             return true;
         }
-        
+
         // Check if it's followed by ( (method call)
         const afterWord = line.substring(startChar + word.length).trim();
         if (afterWord.startsWith('(')) {
             return true;
         }
-        
+
         // Check if it's preceded by . (method or field access)
         const beforeWord = line.substring(0, startChar).trim();
         if (beforeWord.endsWith('.')) {
             return true;
         }
-        
+
         // Check if it's in a type declaration context
         if (beforeWord.match(/:\s*$/) || beforeWord.match(/\(\s*$/) || beforeWord.match(/,\s*$/)) {
             return true;
         }
-        
+
         // Check if it starts with uppercase (likely a class name)
         if (word[0] === word[0].toUpperCase()) {
             return true;
         }
-        
+
         return false;
     }
 
@@ -3111,27 +3112,27 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
      */
     private isInValidContext(line: string, startChar: number): boolean {
         const beforeWord = line.substring(0, startChar).trim();
-        
+
         // In import statements
         if (beforeWord.includes('import')) {
             return true;
         }
-        
+
         // In package declarations
         if (beforeWord.includes('package')) {
             return true;
         }
-        
+
         // After 'new' keyword
         if (beforeWord.endsWith('new')) {
             return true;
         }
-        
+
         // In rule names (quoted strings are handled separately)
         if (beforeWord.includes('rule') && !beforeWord.includes('"')) {
             return true;
         }
-        
+
         return false;
     }
 
@@ -3143,28 +3144,28 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
         if (this.isLikelyValidIdentifier(word, line, startChar)) {
             return false;
         }
-        
+
         // Don't flag common Java class names (start with uppercase)
         if (/^[A-Z][a-zA-Z0-9]*$/.test(word)) {
             return false;
         }
-        
+
         // Don't flag constants (all uppercase with underscores)
         if (/^[A-Z_][A-Z0-9_]*$/.test(word)) {
             return false;
         }
-        
+
         // Flag words that look like they might be intended as Drools keywords
         // This includes lowercase words that aren't obviously variable names
         if (word.length > 3 && /^[a-z]+$/.test(word)) {
             return true; // Pure lowercase words like "invalidkeyword"
         }
-        
+
         // Flag camelCase words that contain "keyword" or other suspicious patterns
         if (/keyword|rule|when|then|exists|not|eval/i.test(word) && word.length > 5) {
             return true;
         }
-        
+
         return false;
     }
 
@@ -3177,10 +3178,10 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
                 // Report duplicate declarations (skip the first one, report the rest)
                 for (let i = 1; i < declarations.length; i++) {
                     const duplicateDeclaration = declarations[i];
-                    
+
                     // Find the specific position of the variable in the condition
                     const variablePosition = this.findVariablePositionInCondition(duplicateDeclaration, variableName);
-                    
+
                     diagnostics.push({
                         severity: DiagnosticSeverity.Error,
                         range: variablePosition || {
@@ -3194,7 +3195,7 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
             }
         }
     }
-    
+
     /**
      * Find the specific position of a variable within a condition
      */
@@ -3279,7 +3280,7 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
         for (const diagnostic of diagnostics) {
             // Create a unique key based on message, source, line, and character
             const key = `${diagnostic.message}|${diagnostic.source}|${diagnostic.range.start.line}|${diagnostic.range.start.character}`;
-            
+
             if (!seen.has(key)) {
                 seen.add(key);
                 deduplicated.push(diagnostic);

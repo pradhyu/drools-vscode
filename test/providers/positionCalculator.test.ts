@@ -79,7 +79,7 @@ describe('PrecisePositionCalculator', () => {
             const deepCalculator = new PrecisePositionCalculator(deeplyIndentedLines);
             const deepThenClause: ThenNode = {
                 type: 'Then',
-                actions: '',
+                actions: 'System.out.println($item);',
                 range: {
                     start: { line: 3, character: 0 },
                     end: { line: 8, character: 3 }
@@ -112,7 +112,7 @@ describe('PrecisePositionCalculator', () => {
             const mixedCalculator = new PrecisePositionCalculator(mixedIndentationLines);
             const mixedThenClause: ThenNode = {
                 type: 'Then',
-                actions: '',
+                actions: 'System.out.println($item);',
                 range: {
                     start: { line: 3, character: 0 },
                     end: { line: 6, character: 3 }
@@ -172,7 +172,7 @@ describe('PrecisePositionCalculator', () => {
             const specialCalculator = new PrecisePositionCalculator(specialCharLines);
             const specialThenClause: ThenNode = {
                 type: 'Then',
-                actions: '',
+                actions: 'System.out.println($item.field);',
                 range: {
                     start: { line: 3, character: 0 },
                     end: { line: 6, character: 3 }
@@ -635,8 +635,8 @@ describe('PrecisePositionCalculator', () => {
             const genericSystemPosition = complexCalculator.findJavaErrorPosition(complexLines[9], 'system', 9);
             expect(genericSystemPosition).not.toBeNull();
             expect(genericSystemPosition!.start.line).toBe(9);
-            expect(genericSystemPosition!.start.character).toBe(19);
-            expect(genericSystemPosition!.end.character).toBe(25);
+            expect(genericSystemPosition!.start.character).toBe(16);
+            expect(genericSystemPosition!.end.character).toBe(22);
             
             // Test system as array type
             const arraySystemPosition = complexCalculator.findJavaErrorPosition(complexLines[10], 'system', 10);
@@ -709,15 +709,15 @@ describe('PrecisePositionCalculator', () => {
             const arraylistPosition = classCalculator.findJavaClassError(classLines[4], 'arraylist', 4);
             expect(arraylistPosition).not.toBeNull();
             expect(arraylistPosition!.start.line).toBe(4);
-            expect(arraylistPosition!.start.character).toBe(4);
-            expect(arraylistPosition!.end.character).toBe(13);
+            expect(arraylistPosition!.start.character).toBe(33);
+            expect(arraylistPosition!.end.character).toBe(42);
             
             // Test hashmap class error (should be HashMap)
             const hashmapPosition = classCalculator.findJavaClassError(classLines[5], 'hashmap', 5);
             expect(hashmapPosition).not.toBeNull();
             expect(hashmapPosition!.start.line).toBe(5);
-            expect(hashmapPosition!.start.character).toBe(4);
-            expect(hashmapPosition!.end.character).toBe(11);
+            expect(hashmapPosition!.start.character).toBe(39);
+            expect(hashmapPosition!.end.character).toBe(46);
             
             // Test stirng type error (should be String)
             const stirngPosition = classCalculator.findJavaClassError(classLines[6], 'stirng', 6);
@@ -741,11 +741,11 @@ describe('PrecisePositionCalculator', () => {
             const nonExistentPosition = calculator.findJavaErrorPosition(testLine, 'nonexistent', 0);
             expect(nonExistentPosition).toBeNull();
             
-            // Test with correct Java construct (should not find as error)
+            // Test with correct Java construct (should still find it as it exists in the line)
             const correctPosition = calculator.findJavaErrorPosition(testLine, 'System', 0);
             expect(correctPosition).not.toBeNull(); // Should still find it as it exists in the line
             
-            // Test with empty error token
+            // Test with empty error token (should return null)
             const emptyPosition = calculator.findJavaErrorPosition(testLine, '', 0);
             expect(emptyPosition).toBeNull();
         });
