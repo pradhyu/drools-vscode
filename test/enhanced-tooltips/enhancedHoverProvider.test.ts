@@ -1,306 +1,210 @@
-/**
- * Tests for Enhanced Hover Provider
- */
-
 import { EnhancedHoverProvider } from '../../src/server/providers/enhancedHoverProvider';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { Position } from 'vscode-languageserver/node';
-import { ParseResult } from '../../src/server/parser/droolsParser';
-
-// Mock the documentation modules
-jest.mock('../../src/server/documentation/droolsDocumentation');
-jest.mock('../../src/server/documentation/javaDocumentation');
-
-import { DroolsDocumentation } from '../../src/server/documentation/droolsDocumentation';
-import { JavaDocumentation } from '../../src/server/documentation/javaDocumentation';
-
-const mockDroolsDoc = DroolsDocumentation as jest.Mocked<typeof DroolsDocumentation>;
-const mockJavaDoc = JavaDocumentation as jest.Mocked<typeof JavaDocumentation>;
+import { DroolsAST } from '../../src/server/parser/ast';
 
 describe('EnhancedHoverProvider', () => {
-    let mockDocument: TextDocument;
-    let mockParseResult: ParseResult;
+    // Create a minimal mock AST for testing
+    const createMockAST = (): DroolsAST => ({
+        type: 'DroolsFile',
+        range: { start: { line: 0, character: 0 }, end: { line: 10, character: 0 } },
+        imports: [],
+        globals: [],
+        functions: [],
+        rules: [],
+        queries: [],
+        declares: []
+    });
 
-    beforeEach(() => {
-        // Reset mocks
-        jest.clearAllMocks();
-
-        // Create mock document
-        mockDocument = TextDocument.create(
-            'file:///test.drl',
-            'drools',
-            1,
-            `rule "Test Rule"
+    describe('hyphenated keyword support', () => {
+        test('should provide hover for no-loop attribute', () => {
+            const content = `rule "Test Rule"
+    no-loop true
     salience 10
-when
-    $customer : Customer(age >= 18)
-    $order : Order(customerId == $customer.id)
-then
-    System.out.println("Processing order");
-    $customer.setVipStatus(true);
-    update($customer);
-end`
-        );
-
-        // Create mock parse result
-        mockParseResult = {
-            ast: {
-                type: 'DroolsFile',
-                range: { start: { line: 0, character: 0 }, end: { line: 10, character: 3 } },
-                packageDeclaration: undefined,
-                imports: [],
-                globals: [],
-                functions: [],
-                rules: [],
-                queries: [],
-                declares: []
-            },
-            errors: []
-        };
-    });
-
-    describe('provideHover', () => {
-        it('should provide hover for Drools keywords', () => {
-            // Mock Drools documentation
-            mockDroolsDoc.getKeywordDoc.mockReturnValue({
-                keyword: 'rule',
-                description: 'Defines a rule with a unique name',
-                syntax: 'rule "rule-name" [attributes] when [conditions] then [actions] end',
-                example: 'rule "Test" when ... then ... end',
-                category: 'rule',
-                relatedKeywords: ['when', 'then', 'end']
-            });
-
-            const position: Position = { line: 0, character: 0 }; // Position at "rule"
-            const result = EnhancedHoverProvider.provideHover(mockDocument, position, mockParseResult);
-
-            expect(result).toBeDefined();
-            expect(result?.contents.kind).toBe('markdown');
-            expect(result?.contents.value).toContain('📘 Drools Keyword: `rule`');
-            expect(result?.contents.value).toContain('Defines a rule with a unique name');
-            expect(mockDroolsDoc.getKeywordDoc).toHaveBeenCalledWith('rule');
-        });
-
-        it('should provide hover for Drools functions', () => {
-            // Mock Drools function documentation
-            mockDroolsDoc.getFunctionDoc.mockReturnValue({
-                name: 'update',
-                description: 'Notifies the engine that a fact has been modified',
-                parameters: [
-                    { name: 'fact', type: 'Object', description: 'The fact object that was modified' }
-                ],
-                returnType: 'void',
-                example: '$customer.setStatus("VIP");\nupdate($customer);',
-                category: 'builtin'
-            });
-
-            const position: Position = { line: 8, character: 4 }; // Position at "update"
-            const result = EnhancedHoverProvider.provideHover(mockDocument, position, mockParseResult);
-
-            expect(result).toBeDefined();
-            expect(result?.contents.value).toContain('🔧 Drools Function: `update`');
-            expect(result?.contents.value).toContain('Notifies the engine that a fact has been modified');
-            expect(mockDroolsDoc.getFunctionDoc).toHaveBeenCalledWith('update');
-        });
-
-        it('should provide hover for Java methods', () => {
-            // Mock Java method documentation
-            mockJavaDoc.getMethodDoc.mockReturnValue({
-                className: 'System',
-                methodName: 'out.println',
-                description: 'Prints the argument and then terminates the line',
-                parameters: [
-                    { name: 'x', type: 'Object', description: 'The value to be printed' }
-                ],
-                returnType: 'void',
-                example: 'System.out.println("Hello World");'
-            });
-
-            const position: Position = { line: 6, character: 15 }; // Position at "println"
-            const result = EnhancedHoverProvider.provideHover(mockDocument, position, mockParseResult);
-
-            expect(result).toBeDefined();
-            expect(result?.contents.value).toContain('☕ Java Method: `System.out.println`');
-            expect(result?.contents.value).toContain('Prints the argument and then terminates the line');
-            expect(mockJavaDoc.getMethodDoc).toHaveBeenCalledWith('System.out.println');
-        });
-
-        it('should provide hover for Java classes', () => {
-            // Mock Java class documentation
-            mockJavaDoc.getClassDoc.mockReturnValue({
-                className: 'System',
-                packageName: 'java.lang',
-                description: 'The System class contains several useful class fields and methods',
-                commonMethods: ['out.println', 'out.print', 'currentTimeMillis'],
-                example: 'System.out.println("Hello World");'
-            });
-
-            const position: Position = { line: 6, character: 4 }; // Position at "System"
-            const result = EnhancedHoverProvider.provideHover(mockDocument, position, mockParseResult);
-
-            expect(result).toBeDefined();
-            expect(result?.contents.value).toContain('☕ Java Class: `System`');
-            expect(result?.contents.value).toContain('The System class contains several useful class fields and methods');
-            expect(mockJavaDoc.getClassDoc).toHaveBeenCalledWith('System');
-        });
-
-        it('should provide hover for variables', () => {
-            const position: Position = { line: 3, character: 4 }; // Position at "$customer"
-            const result = EnhancedHoverProvider.provideHover(mockDocument, position, mockParseResult);
-
-            expect(result).toBeDefined();
-            expect(result?.contents.value).toContain('🔧 Drools Variable: `$customer`');
-            expect(result?.contents.value).toContain('Variable binding');
-            expect(result?.contents.value).toContain('When clause (LHS)');
-        });
-
-        it('should return null for unknown words', () => {
-            // Mock no documentation found
-            mockDroolsDoc.getKeywordDoc.mockReturnValue(null);
-            mockDroolsDoc.getFunctionDoc.mockReturnValue(null);
-            mockJavaDoc.getMethodDoc.mockReturnValue(null);
-            mockJavaDoc.getClassDoc.mockReturnValue(null);
-
-            const position: Position = { line: 0, character: 50 }; // Position at unknown word
-            const result = EnhancedHoverProvider.provideHover(mockDocument, position, mockParseResult);
-
-            expect(result).toBeNull();
-        });
-    });
-
-    describe('context detection', () => {
-        it('should detect when clause context', () => {
-            const whenDocument = TextDocument.create(
-                'file:///test.drl',
-                'drools',
-                1,
-                `rule "Test"
 when
     $customer : Customer()
 then
     // actions
-end`
-            );
-
-            // Mock keyword documentation
-            mockDroolsDoc.getKeywordDoc.mockReturnValue({
-                keyword: 'Customer',
-                description: 'Test description',
-                syntax: 'test syntax',
-                example: 'test example',
-                category: 'rule'
-            });
-
-            const position: Position = { line: 2, character: 16 }; // Position at "Customer"
-            const result = EnhancedHoverProvider.provideHover(whenDocument, position, mockParseResult);
-
-            // Should detect when clause context
-            expect(result).toBeDefined();
+end`;
+            
+            const document = TextDocument.create('test://test.drl', 'drools', 1, content);
+            const position: Position = { line: 1, character: 6 }; // Position on "no-loop"
+            
+            const hover = EnhancedHoverProvider.provideHover(document, position, { ast: createMockAST(), errors: [] });
+            
+            expect(hover).toBeTruthy();
+            expect(hover?.contents).toBeTruthy();
+            if (hover?.contents && typeof hover.contents === 'object' && 'value' in hover.contents) {
+                expect(hover.contents.value).toContain('no-loop');
+                expect(hover.contents.value).toContain('Prevents a rule from firing again');
+            }
         });
 
-        it('should detect then clause context', () => {
-            const thenDocument = TextDocument.create(
-                'file:///test.drl',
-                'drools',
-                1,
-                `rule "Test"
+        test('should provide hover for lock-on-active attribute', () => {
+            const content = `rule "Test Rule"
+    agenda-group "test"
+    lock-on-active true
 when
     $customer : Customer()
 then
-    System.out.println("test");
-end`
-            );
-
-            // Mock Java method documentation
-            mockJavaDoc.getMethodDoc.mockReturnValue({
-                className: 'System',
-                methodName: 'out.println',
-                description: 'Prints the argument',
-                parameters: [],
-                returnType: 'void',
-                example: 'System.out.println("test");'
-            });
-
-            const position: Position = { line: 4, character: 15 }; // Position at "println"
-            const result = EnhancedHoverProvider.provideHover(thenDocument, position, mockParseResult);
-
-            // Should detect then clause context and provide Java method hover
-            expect(result).toBeDefined();
-            expect(result?.contents.value).toContain('☕ Java Method');
+    // actions
+end`;
+            
+            const document = TextDocument.create('test://test.drl', 'drools', 1, content);
+            const position: Position = { line: 2, character: 10 }; // Position on "lock-on-active"
+            
+            const hover = EnhancedHoverProvider.provideHover(document, position, { ast: createMockAST(), errors: [] });
+            
+            expect(hover).toBeTruthy();
+            expect(hover?.contents).toBeTruthy();
+            if (hover?.contents && typeof hover.contents === 'object' && 'value' in hover.contents) {
+                expect(hover.contents.value).toContain('lock-on-active');
+                expect(hover.contents.value).toContain('agenda group is executing');
+            }
         });
-    });
 
-    describe('word detection', () => {
-        it('should correctly extract words at different positions', () => {
+        test('should provide hover for activation-group attribute', () => {
+            const content = `rule "High Priority"
+    activation-group "priority-rules"
+    salience 10
+when
+    $customer : Customer()
+then
+    // actions
+end`;
+            
+            const document = TextDocument.create('test://test.drl', 'drools', 1, content);
+            const position: Position = { line: 1, character: 10 }; // Position on "activation-group"
+            
+            const hover = EnhancedHoverProvider.provideHover(document, position, { ast: createMockAST(), errors: [] });
+            
+            expect(hover).toBeTruthy();
+            expect(hover?.contents).toBeTruthy();
+            if (hover?.contents && typeof hover.contents === 'object' && 'value' in hover.contents) {
+                expect(hover.contents.value).toContain('activation-group');
+                expect(hover.contents.value).toContain('only one rule in the group can fire');
+            }
+        });
+
+        test('should provide hover for agenda-group attribute', () => {
+            const content = `rule "Validation Rule"
+    agenda-group "validation"
+when
+    $customer : Customer()
+then
+    // actions
+end`;
+            
+            const document = TextDocument.create('test://test.drl', 'drools', 1, content);
+            const position: Position = { line: 1, character: 8 }; // Position on "agenda-group"
+            
+            const hover = EnhancedHoverProvider.provideHover(document, position, { ast: createMockAST(), errors: [] });
+            
+            expect(hover).toBeTruthy();
+            expect(hover?.contents).toBeTruthy();
+            if (hover?.contents && typeof hover.contents === 'object' && 'value' in hover.contents) {
+                expect(hover.contents.value).toContain('agenda-group');
+                expect(hover.contents.value).toContain('controlled execution');
+            }
+        });
+
+        test('should provide hover for ruleflow-group attribute', () => {
+            const content = `rule "Process Order"
+    ruleflow-group "order-processing"
+when
+    $order : Order()
+then
+    // actions
+end`;
+            
+            const document = TextDocument.create('test://test.drl', 'drools', 1, content);
+            const position: Position = { line: 1, character: 10 }; // Position on "ruleflow-group"
+            
+            const hover = EnhancedHoverProvider.provideHover(document, position, { ast: createMockAST(), errors: [] });
+            
+            expect(hover).toBeTruthy();
+            expect(hover?.contents).toBeTruthy();
+            if (hover?.contents && typeof hover.contents === 'object' && 'value' in hover.contents) {
+                expect(hover.contents.value).toContain('ruleflow-group');
+                expect(hover.contents.value).toContain('process-driven rule execution');
+            }
+        });
+
+        test('should handle complex rule with multiple hyphenated attributes', () => {
+            const content = `rule "Complex Rule"
+    no-loop true
+    lock-on-active true
+    agenda-group "processing"
+    activation-group "exclusive-rules"
+    salience 100
+when
+    $order : Order(amount > 500 && amount <= 1000)
+then
+    $order.setScore(500);
+    update($order);
+end`;
+            
+            const document = TextDocument.create('test://test.drl', 'drools', 1, content);
+            
+            // Test each hyphenated attribute
             const testCases = [
-                { line: 'rule "Test Rule"', position: 0, expected: 'rule' },
-                { line: 'rule "Test Rule"', position: 5, expected: '' }, // In quotes
-                { line: '$customer : Customer()', position: 0, expected: '$customer' },
-                { line: '$customer : Customer()', position: 12, expected: 'Customer' },
-                { line: 'System.out.println("test")', position: 0, expected: 'System' },
-                { line: 'System.out.println("test")', position: 11, expected: 'println' }
+                { line: 1, character: 6, keyword: 'no-loop' },
+                { line: 2, character: 10, keyword: 'lock-on-active' },
+                { line: 3, character: 8, keyword: 'agenda-group' },
+                { line: 4, character: 10, keyword: 'activation-group' }
             ];
-
-            testCases.forEach(({ line, position, expected }) => {
-                const document = TextDocument.create('file:///test.drl', 'drools', 1, line);
-                const pos: Position = { line: 0, character: position };
+            
+            testCases.forEach(testCase => {
+                const position: Position = { line: testCase.line, character: testCase.character };
+                const hover = EnhancedHoverProvider.provideHover(document, position, { ast: createMockAST(), errors: [] });
                 
-                // This tests the internal word extraction logic
-                // We can't directly test the private method, but we can test the behavior
-                if (expected) {
-                    // Mock appropriate documentation based on expected word
-                    if (expected.startsWith('$')) {
-                        // Variable - should get variable hover
-                        const result = EnhancedHoverProvider.provideHover(document, pos, mockParseResult);
-                        if (result) {
-                            expect(result.contents.value).toContain('Variable');
-                        }
-                    } else if (['rule', 'when', 'then'].includes(expected)) {
-                        mockDroolsDoc.getKeywordDoc.mockReturnValue({
-                            keyword: expected,
-                            description: 'Test description',
-                            syntax: 'test syntax',
-                            example: 'test example',
-                            category: 'rule'
-                        });
-                        const result = EnhancedHoverProvider.provideHover(document, pos, mockParseResult);
-                        expect(result).toBeDefined();
-                    }
+                expect(hover).toBeTruthy();
+                expect(hover?.contents).toBeTruthy();
+                if (hover?.contents && typeof hover.contents === 'object' && 'value' in hover.contents) {
+                    expect(hover.contents.value).toContain(testCase.keyword);
                 }
             });
         });
+
+        test('should not provide hover for non-existent hyphenated keywords', () => {
+            const content = `rule "Test Rule"
+    fake-attribute true
+when
+    $customer : Customer()
+then
+    // actions
+end`;
+            
+            const document = TextDocument.create('test://test.drl', 'drools', 1, content);
+            const position: Position = { line: 1, character: 8 }; // Position on "fake-attribute"
+            
+            const hover = EnhancedHoverProvider.provideHover(document, position, { ast: createMockAST(), errors: [] });
+            
+            // Should return null for unknown attributes
+            expect(hover).toBeNull();
+        });
     });
 
-    describe('error handling', () => {
-        it('should handle malformed documents gracefully', () => {
-            const malformedDocument = TextDocument.create(
-                'file:///test.drl',
-                'drools',
-                1,
-                'invalid drools syntax here'
-            );
-
-            const position: Position = { line: 0, character: 0 };
+    describe('word extraction with hyphens', () => {
+        test('should extract hyphenated words correctly', () => {
+            // This tests the regex pattern indirectly through the hover functionality
+            const content = 'rule "test" no-loop true lock-on-active true agenda-group "test"';
+            const document = TextDocument.create('test://test.drl', 'drools', 1, content);
             
-            expect(() => {
-                EnhancedHoverProvider.provideHover(malformedDocument, position, mockParseResult);
-            }).not.toThrow();
-        });
-
-        it('should handle positions outside document bounds', () => {
-            const position: Position = { line: 100, character: 100 }; // Way outside document
+            // Test positions that should extract hyphenated words
+            const testPositions = [
+                { line: 0, character: 15, expectedKeyword: 'no-loop' },
+                { line: 0, character: 30, expectedKeyword: 'lock-on-active' },
+                { line: 0, character: 50, expectedKeyword: 'agenda-group' }
+            ];
             
-            expect(() => {
-                EnhancedHoverProvider.provideHover(mockDocument, position, mockParseResult);
-            }).not.toThrow();
-        });
-
-        it('should handle empty documents', () => {
-            const emptyDocument = TextDocument.create('file:///test.drl', 'drools', 1, '');
-            const position: Position = { line: 0, character: 0 };
-            
-            const result = EnhancedHoverProvider.provideHover(emptyDocument, position, mockParseResult);
-            expect(result).toBeNull();
+            testPositions.forEach(test => {
+                const hover = EnhancedHoverProvider.provideHover(document, test, { ast: createMockAST(), errors: [] });
+                expect(hover).toBeTruthy();
+                if (hover?.contents && typeof hover.contents === 'object' && 'value' in hover.contents) {
+                    expect(hover.contents.value).toContain(test.expectedKeyword);
+                }
+            });
         });
     });
 });

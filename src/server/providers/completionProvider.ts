@@ -15,6 +15,7 @@ import {
 } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { DroolsAST, RuleNode, ConditionNode } from '../parser/ast';
+import { JavaCompletionProvider, JavaCompletionContext } from './javaCompletionProvider';
 
 export interface CompletionSettings {
     enableKeywordCompletion: boolean;

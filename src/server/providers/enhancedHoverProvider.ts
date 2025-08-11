@@ -9,6 +9,7 @@ import { DroolsAST } from '../parser/ast';
 import { ParseResult } from '../parser/droolsParser';
 import { DroolsDocumentation, DroolsKeywordDoc, DroolsFunctionDoc } from '../documentation/droolsDocumentation';
 import { JavaDocumentation, JavaClassDoc, JavaMethodDoc } from '../documentation/javaDocumentation';
+import { JavaKeywords, JavaKeywordDoc } from '../documentation/javaKeywords';
 import { EnhancedSyntaxHighlighter } from '../utils/enhancedSyntaxHighlighter';
 
 export interface HoverContext {
@@ -38,6 +39,7 @@ export class EnhancedHoverProvider {
             return (
                 this.provideDroolsKeywordHover(context) ||
                 this.provideDroolsFunctionHover(context) ||
+                this.provideJavaKeywordHover(context) ||
                 this.provideJavaMethodHover(context) ||
                 this.provideJavaClassHover(context) ||
                 this.provideVariableHover(context, parseResult) ||
@@ -81,7 +83,8 @@ export class EnhancedHoverProvider {
      * Get word at specific character position
      */
     private static getWordAtPosition(line: string, character: number): string {
-        const wordRegex = /[$a-zA-Z_][a-zA-Z0-9_]*/g;
+        // Updated regex to include hyphens for Drools attributes like no-loop, lock-on-active
+        const wordRegex = /[$a-zA-Z_][$a-zA-Z0-9_-]*/g;
         let match;
         
         while ((match = wordRegex.exec(line)) !== null) {
@@ -171,6 +174,24 @@ export class EnhancedHoverProvider {
         if (!functionDoc) return null;
 
         const content = this.formatDroolsFunctionHover(functionDoc);
+        
+        return {
+            contents: content,
+            range: this.getWordRange(context)
+        };
+    }
+
+    /**
+     * Provide hover for Java keywords and built-in classes
+     */
+    private static provideJavaKeywordHover(context: HoverContext): Hover | null {
+        // Initialize Java keywords if not already done
+        JavaKeywords.initialize();
+        
+        const keywordDoc = JavaKeywords.getKeywordDoc(context.word);
+        if (!keywordDoc) return null;
+
+        const content = this.formatJavaKeywordHover(keywordDoc);
         
         return {
             contents: content,
@@ -345,6 +366,38 @@ ${methodDoc.example}
 
         if (methodDoc.since) {
             content += `\n\n**Since:** Java ${methodDoc.since}`;
+        }
+
+        return {
+            kind: MarkupKind.Markdown,
+            value: content
+        };
+    }
+
+    /**
+     * Format Java keyword hover content
+     */
+    private static formatJavaKeywordHover(keywordDoc: JavaKeywordDoc): MarkupContent {
+        let content = `### ☕ Java ${keywordDoc.category === 'primitive' ? 'Primitive Type' : keywordDoc.category === 'keyword' ? 'Keyword' : 'Class'}: \`${keywordDoc.keyword}\`
+
+**Category:** ${keywordDoc.category}
+
+**Description:** ${keywordDoc.description}`;
+
+        if (keywordDoc.syntax) {
+            content += `\n\n**Syntax:**
+\`\`\`java
+${keywordDoc.syntax}
+\`\`\``;
+        }
+
+        content += `\n\n**Example:**
+\`\`\`java
+${keywordDoc.example}
+\`\`\``;
+
+        if (keywordDoc.since) {
+            content += `\n\n**Since:** ${keywordDoc.since}`;
         }
 
         return {

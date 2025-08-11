@@ -242,6 +242,48 @@ end`,
             relatedKeywords: ['agenda-group', 'salience']
         }],
         
+        ['lock-on-active', {
+            keyword: 'lock-on-active',
+            description: 'Prevents a rule from firing again while any rule in the same agenda group is executing.',
+            syntax: 'lock-on-active [true|false]',
+            example: `rule "Process Order"
+    agenda-group "order-processing"
+    lock-on-active true
+when
+    $order : Order(status == "NEW")
+then
+    $order.setStatus("PROCESSING");
+    update($order);
+end`,
+            category: 'attribute',
+            relatedKeywords: ['agenda-group', 'no-loop', 'salience']
+        }],
+        
+        ['activation-group', {
+            keyword: 'activation-group',
+            description: 'Groups rules so that only one rule in the group can fire. Once one rule fires, all other rules in the group are cancelled.',
+            syntax: 'activation-group "group-name"',
+            example: `rule "High Value Customer"
+    activation-group "customer-classification"
+    salience 10
+when
+    $customer : Customer(totalPurchases > 10000)
+then
+    $customer.setCategory("PREMIUM");
+end
+
+rule "Regular Customer"
+    activation-group "customer-classification"
+    salience 5
+when
+    $customer : Customer(totalPurchases <= 10000)
+then
+    $customer.setCategory("REGULAR");
+end`,
+            category: 'attribute',
+            relatedKeywords: ['agenda-group', 'salience']
+        }],
+        
         ['global', {
             keyword: 'global',
             description: 'Declares a global variable accessible to all rules.',

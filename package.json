@@ -430,6 +430,24 @@
           "description": "Enable custom user-defined snippets",
           "scope": "resource"
         },
+        "drools.snippets.enableJavaSnippets": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Java code snippets in then clauses",
+          "scope": "resource"
+        },
+        "drools.snippets.enableDroolsSnippets": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Drools-specific snippets for fact manipulation and rule engine operations",
+          "scope": "resource"
+        },
+        "drools.snippets.contextAwarePriority": {
+          "type": "boolean",
+          "default": true,
+          "description": "Prioritize relevant snippets based on context (e.g., Java snippets in then clauses)",
+          "scope": "resource"
+        },
         "drools.snippets.customPath": {
           "type": "string",
           "default": "",
