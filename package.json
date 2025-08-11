@@ -263,6 +263,97 @@
           "description": "Severity levels for different types of diagnostics",
           "scope": "resource"
         },
+        "drools.tooltips.enableEnhancedTooltips": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable enhanced tooltips with syntax highlighting and documentation",
+          "scope": "window"
+        },
+        "drools.tooltips.enableKeywordDocumentation": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show documentation for Drools keywords on hover",
+          "scope": "window"
+        },
+        "drools.tooltips.enableJavaDocumentation": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show Java API documentation on hover in then clauses",
+          "scope": "window"
+        },
+        "drools.tooltips.enableCodeContext": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show code context around errors in tooltips",
+          "scope": "window"
+        },
+        "drools.tooltips.enableSuggestions": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show fix suggestions in error tooltips",
+          "scope": "window"
+        },
+        "drools.tooltips.maxContextLines": {
+          "type": "number",
+          "default": 3,
+          "minimum": 1,
+          "maximum": 10,
+          "description": "Maximum number of context lines to show in tooltips",
+          "scope": "window"
+        },
+        "drools.gutter.enableErrorIcons": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show error icons in the editor gutter",
+          "scope": "window"
+        },
+        "drools.gutter.enableWarningIcons": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show warning icons in the editor gutter",
+          "scope": "window"
+        },
+        "drools.gutter.enableInfoIcons": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show info icons in the editor gutter",
+          "scope": "window"
+        },
+        "drools.gutter.enableClickableIcons": {
+          "type": "boolean",
+          "default": true,
+          "description": "Make gutter icons clickable for quick actions",
+          "scope": "window"
+        },
+        "drools.gutter.iconSize": {
+          "type": "string",
+          "enum": [
+            "small",
+            "medium",
+            "large"
+          ],
+          "default": "medium",
+          "description": "Size of gutter icons",
+          "scope": "window"
+        },
+        "drools.theme.adaptToVSCodeTheme": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically adapt tooltip colors to VSCode theme",
+          "scope": "window"
+        },
+        "drools.theme.preferredTheme": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "light",
+            "dark",
+            "high-contrast"
+          ],
+          "default": "auto",
+          "description": "Preferred theme for tooltips and syntax highlighting",
+          "scope": "window"
+        },
         "drools.formatting.formatOnSave": {
           "type": "boolean",
           "default": true,
