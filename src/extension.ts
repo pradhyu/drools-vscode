@@ -12,6 +12,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { DroolsSnippetProvider } from './snippetProvider';
 import { DroolsFallbackProvider } from './fallbackProvider';
+import { GutterIndicatorManager } from './gutterIndicatorManager';
 import { ConfigurationManager, isFormattingEnabled, isCompletionEnabled, isDiagnosticsEnabled, isSnippetsEnabled, getFormattingOptions } from './configurationManager';
 
 let client: LanguageClient;
@@ -21,6 +22,7 @@ let outputChannel: vscode.OutputChannel;
 let fallbackProvider: DroolsFallbackProvider;
 let fallbackDisposables: vscode.Disposable[] = [];
 let configManager: ConfigurationManager;
+let gutterIndicatorManager: GutterIndicatorManager;
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('Drools VSCode Extension is now active!');
@@ -34,6 +36,15 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Initialize fallback provider
     fallbackProvider = new DroolsFallbackProvider(outputChannel);
+
+    // Initialize gutter indicator manager
+    gutterIndicatorManager = new GutterIndicatorManager({
+        enableErrorIcons: true,
+        enableWarningIcons: true,
+        enableInfoIcons: true,
+        enableClickableIcons: true,
+        iconSize: 'medium'
+    });
 
     // Start the language server with error handling (only if enabled)
     const serverConfig = configManager.getServerConfiguration();
@@ -281,6 +292,18 @@ function startLanguageServer(context: vscode.ExtensionContext) {
                 case State.Starting:
                     outputChannel.appendLine('Language server starting...');
                     break;
+            }
+        });
+
+        // Set up diagnostic event listener for gutter indicators
+        client.onDidChangeState((event) => {
+            if (event.newState === State.Running) {
+                // Listen for diagnostic changes
+                client.onNotification('textDocument/publishDiagnostics', (params) => {
+                    if (gutterIndicatorManager) {
+                        gutterIndicatorManager.updateIndicators(params.uri, params.diagnostics);
+                    }
+                });
             }
         });
 

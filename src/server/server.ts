@@ -37,6 +37,7 @@ import { DroolsFormattingProvider, FormattingSettings } from './providers/format
 import { DroolsFoldingProvider, FoldingSettings } from './providers/foldingProvider';
 import { DroolsSymbolProvider, SymbolSettings } from './providers/symbolProvider';
 import { DroolsBracketMatchingProvider, BracketMatchingSettings } from './providers/bracketMatchingProvider';
+import { EnhancedHoverProvider } from './providers/enhancedHoverProvider';
 import { PerformanceManager, PerformanceSettings } from './performance/performanceManager';
 
 // Create a connection for the server, using Node's IPC as a transport.
@@ -793,7 +794,7 @@ connection.onFoldingRanges(
     }
 );
 
-// Hover provider for bracket matching
+// Enhanced hover provider with documentation support
 connection.onHover(
     async (params: HoverParams): Promise<Hover | null> => {
         try {
@@ -802,29 +803,39 @@ connection.onHover(
                 return null;
             }
 
-            const settings = await getDocumentSettings(params.textDocument.uri);
-            if (!settings.features.enableBracketMatching) {
-                return null;
-            }
-
             // Get parsed document
             const parseResult = await getOrParseDocument(document);
             
-            // Create bracket matching settings from server settings
-            const bracketMatchingSettings: BracketMatchingSettings = {
-                enableBracketMatching: settings.features.enableBracketMatching,
-                enableHoverSupport: true,
-                enableVisualIndicators: true,
-                maxSearchDistance: 1000
-            };
-            
-            // Create bracket matching provider and get hover
-            const bracketMatchingProvider = new DroolsBracketMatchingProvider(bracketMatchingSettings);
-            return bracketMatchingProvider.provideBracketHover(
+            // Try enhanced hover provider first (for keywords, methods, classes)
+            const enhancedHover = EnhancedHoverProvider.provideHover(
                 document,
                 params.position,
                 parseResult
             );
+            
+            if (enhancedHover) {
+                return enhancedHover;
+            }
+
+            // Fallback to bracket matching hover if enabled
+            const settings = await getDocumentSettings(params.textDocument.uri);
+            if (settings.features.enableBracketMatching) {
+                const bracketMatchingSettings: BracketMatchingSettings = {
+                    enableBracketMatching: settings.features.enableBracketMatching,
+                    enableHoverSupport: true,
+                    enableVisualIndicators: true,
+                    maxSearchDistance: 1000
+                };
+                
+                const bracketMatchingProvider = new DroolsBracketMatchingProvider(bracketMatchingSettings);
+                return bracketMatchingProvider.provideBracketHover(
+                    document,
+                    params.position,
+                    parseResult
+                );
+            }
+            
+            return null;
             
         } catch (error) {
             logError('Hover', error, params.textDocument.uri);
