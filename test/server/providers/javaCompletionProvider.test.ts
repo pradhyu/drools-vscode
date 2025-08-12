@@ -287,7 +287,10 @@ describe('JavaCompletionProvider', () => {
             const document = createMockDocument(content);
             const position = Position.create(4, 11); // After 'str.sub'
 
-            const result = JavaCompletionProvider.provideCompletions(document, position, '.');
+            const result = JavaCompletionProvider.provideCompletions(document, position);
+            
+            // Debug: log all completions
+            console.log('All Java completions:', result.items.map(c => ({ label: c.label, kind: c.kind })));
             
             const substringMethod = result.items.find(item => item.label === 'substring');
             expect(substringMethod).toBeDefined();
@@ -302,7 +305,10 @@ describe('JavaCompletionProvider', () => {
             const document = createMockDocument(content);
             const position = Position.create(4, 12); // After 'str.repl'
 
-            const result = JavaCompletionProvider.provideCompletions(document, position, '.');
+            const result = JavaCompletionProvider.provideCompletions(document, position);
+            
+            // Debug: log all completions
+            console.log('All Java completions for replace:', result.items.map(c => ({ label: c.label, kind: c.kind })));
             
             const replaceMethod = result.items.find(item => item.label === 'replace');
             expect(replaceMethod).toBeDefined();

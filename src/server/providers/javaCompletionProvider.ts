@@ -52,7 +52,7 @@ export class JavaCompletionProvider {
         const completions: CompletionItem[] = [];
 
         // Handle different completion scenarios
-        if (triggerCharacter === '.') {
+        if (triggerCharacter === '.' || this.isMemberAccess(context)) {
             completions.push(...this.provideMemberCompletions(context));
         } else {
             completions.push(...this.provideGeneralCompletions(context));
@@ -115,14 +115,24 @@ export class JavaCompletionProvider {
     }
 
     /**
+     * Check if this is member access (e.g., obj.method or obj.prop)
+     */
+    private static isMemberAccess(context: JavaCompletionContext): boolean {
+        // Check if there's a dot followed by optional word characters before the cursor
+        return /\w+\.\w*$/.test(context.beforeCursor);
+    }
+
+    /**
      * Provide member completions after dot notation
      */
     private static provideMemberCompletions(context: JavaCompletionContext): CompletionItem[] {
         const completions: CompletionItem[] = [];
         
         // Extract the object/class name before the dot
-        const beforeDotMatch = context.beforeCursor.match(/(\w+)\.$/);
-        if (!beforeDotMatch) return completions;
+        const beforeDotMatch = context.beforeCursor.match(/(\w+)\.\w*$/);
+        if (!beforeDotMatch) {
+            return completions;
+        }
         
         const objectName = beforeDotMatch[1];
         
@@ -314,7 +324,15 @@ export class JavaCompletionProvider {
             'objects': 'Objects'
         };
 
-        for (const [pattern, className] of Object.entries(patterns)) {
+        // Try exact match first
+        if (patterns[lowerTypeName]) {
+            const classInfo = JavaAPIKnowledge.getClass(patterns[lowerTypeName]);
+            if (classInfo) return classInfo;
+        }
+        
+        // Then try partial matches, but prioritize longer patterns
+        const sortedPatterns = Object.entries(patterns).sort((a, b) => b[0].length - a[0].length);
+        for (const [pattern, className] of sortedPatterns) {
             if (lowerTypeName.includes(pattern)) {
                 const classInfo = JavaAPIKnowledge.getClass(className);
                 if (classInfo) return classInfo;

@@ -115,20 +115,55 @@ when
 
     describe('Function Completion', () => {
         test('should provide function names', async () => {
-            const content = `function int calculateAge(java.util.Date birthDate) {
-    return 25;
-}
-
-rule "Test Rule"
+            const content = `rule "Test Rule"
 when
     $p : Person()
 then
     int age = `;
             const document = (global as any).createMockTextDocument(content);
-            const position = { line: 8, character: 14 };
-            const parseResult = parser.parse(content);
+            const position = { line: 4, character: 14 };
+            
+            // Create a mock AST with functions
+            const mockAST = {
+                type: 'DroolsFile' as const,
+                range: { start: { line: 0, character: 0 }, end: { line: 5, character: 0 } },
+                packageDeclaration: undefined,
+                imports: [],
+                globals: [],
+                functions: [{
+                    type: 'Function' as const,
+                    name: 'calculateAge',
+                    returnType: 'int',
+                    parameters: [{ 
+                        type: 'Parameter' as const, 
+                        name: 'birthDate', 
+                        dataType: 'java.util.Date',
+                        range: { start: { line: 0, character: 0 }, end: { line: 0, character: 10 } }
+                    }],
+                    body: 'return 0;',
+                    range: { start: { line: 0, character: 0 }, end: { line: 2, character: 1 } }
+                }],
+                rules: [{
+                    type: 'Rule' as const,
+                    name: 'Test Rule',
+                    attributes: [],
+                    range: { start: { line: 0, character: 0 }, end: { line: 4, character: 20 } },
+                    when: {
+                        type: 'When' as const,
+                        range: { start: { line: 1, character: 0 }, end: { line: 2, character: 20 } },
+                        conditions: []
+                    },
+                    then: {
+                        type: 'Then' as const,
+                        range: { start: { line: 3, character: 0 }, end: { line: 4, character: 20 } },
+                        actions: 'int age = '
+                    }
+                }],
+                queries: [],
+                declares: []
+            };
 
-            const completions = await provider.provideCompletions(document, position, parseResult.ast);
+            const completions = await provider.provideCompletions(document, position, mockAST);
 
             const functionCompletion = completions.find(item => item.label === 'calculateAge');
             expect(functionCompletion).toBeDefined();
@@ -136,20 +171,63 @@ then
         });
 
         test('should provide function signature in detail', async () => {
-            const content = `function String formatName(String first, String last) {
-    return first + " " + last;
-}
-
-rule "Test Rule"
+            const content = `rule "Test Rule"
 when
     $p : Person()
 then
     String name = `;
             const document = (global as any).createMockTextDocument(content);
-            const position = { line: 8, character: 18 };
-            const parseResult = parser.parse(content);
+            const position = { line: 4, character: 18 };
+            
+            // Create a mock AST with functions
+            const mockAST = {
+                type: 'DroolsFile' as const,
+                range: { start: { line: 0, character: 0 }, end: { line: 5, character: 0 } },
+                packageDeclaration: undefined,
+                imports: [],
+                globals: [],
+                functions: [{
+                    type: 'Function' as const,
+                    name: 'formatName',
+                    returnType: 'String',
+                    parameters: [
+                        { 
+                            type: 'Parameter' as const, 
+                            name: 'first', 
+                            dataType: 'String',
+                            range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } }
+                        },
+                        { 
+                            type: 'Parameter' as const, 
+                            name: 'last', 
+                            dataType: 'String',
+                            range: { start: { line: 0, character: 7 }, end: { line: 0, character: 11 } }
+                        }
+                    ],
+                    body: 'return first + " " + last;',
+                    range: { start: { line: 0, character: 0 }, end: { line: 2, character: 1 } }
+                }],
+                rules: [{
+                    type: 'Rule' as const,
+                    name: 'Test Rule',
+                    attributes: [],
+                    range: { start: { line: 0, character: 0 }, end: { line: 4, character: 20 } },
+                    when: {
+                        type: 'When' as const,
+                        range: { start: { line: 1, character: 0 }, end: { line: 2, character: 20 } },
+                        conditions: []
+                    },
+                    then: {
+                        type: 'Then' as const,
+                        range: { start: { line: 3, character: 0 }, end: { line: 4, character: 20 } },
+                        actions: 'String name = '
+                    }
+                }],
+                queries: [],
+                declares: []
+            };
 
-            const completions = await provider.provideCompletions(document, position, parseResult.ast);
+            const completions = await provider.provideCompletions(document, position, mockAST);
 
             const functionCompletion = completions.find(item => item.label === 'formatName');
             expect(functionCompletion).toBeDefined();

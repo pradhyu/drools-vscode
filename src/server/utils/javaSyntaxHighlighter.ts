@@ -133,6 +133,7 @@ export class JavaSyntaxHighlighter {
 
     // Stream and functional programming methods
     private static readonly STREAM_METHODS = new Set([
+        'stream', // Add the stream method itself
         'filter', 'map', 'mapToInt', 'mapToLong', 'mapToDouble', 'mapToObj',
         'flatMap', 'flatMapToInt', 'flatMapToLong', 'flatMapToDouble',
         'distinct', 'sorted', 'peek', 'limit', 'skip', 'takeWhile', 'dropWhile',
@@ -471,67 +472,105 @@ export class JavaSyntaxHighlighter {
      * Apply highlighting to code based on tokens
      */
     private static applyHighlighting(code: string, tokens: JavaToken[]): string {
+        // Use simple regex-based highlighting instead of token-based to avoid overlaps
+        return this.applySimpleHighlighting(code);
+    }
+
+    /**
+     * Apply simple regex-based highlighting
+     */
+    private static applySimpleHighlighting(code: string): string {
         let highlighted = code;
+
+        // First, protect strings and comments from being processed
+        const protectedStrings: string[] = [];
+        const protectedComments: string[] = [];
         
-        // Apply highlighting in reverse order to maintain positions
-        for (let i = tokens.length - 1; i >= 0; i--) {
-            const token = tokens[i];
-            const before = highlighted.substring(0, token.start);
-            const after = highlighted.substring(token.end);
-            const tokenValue = highlighted.substring(token.start, token.end);
-            
-            let highlightedToken = tokenValue;
-            
-            switch (token.type) {
-                case 'keyword':
-                    highlightedToken = `**${tokenValue}**`;
-                    break;
-                case 'literal':
-                    highlightedToken = `***${tokenValue}***`;
-                    break;
-                case 'primitive':
-                    highlightedToken = `**${tokenValue}**`;
-                    break;
-                case 'class':
-                    highlightedToken = `*${tokenValue}*`;
-                    break;
-                case 'method':
-                    if (this.STREAM_METHODS.has(tokenValue)) {
-                        highlightedToken = `**${tokenValue}**`;
-                    } else {
-                        highlightedToken = `*${tokenValue}*`;
-                    }
-                    break;
-                case 'operator':
-                    if (tokenValue === '->' || tokenValue === '::') {
-                        highlightedToken = `**${tokenValue}**`;
-                    } else {
-                        highlightedToken = `**${tokenValue}**`;
-                    }
-                    break;
-                case 'string':
-                    highlightedToken = `\`${tokenValue}\``;
-                    break;
-                case 'number':
-                    highlightedToken = `\`${tokenValue}\``;
-                    break;
-                case 'comment':
-                    highlightedToken = `*${tokenValue}*`;
-                    break;
-                case 'annotation':
-                    highlightedToken = `***${tokenValue}***`;
-                    break;
-                case 'lambda':
-                    highlightedToken = `**${tokenValue}**`;
-                    break;
-                case 'generic':
-                    highlightedToken = `***${tokenValue}***`;
-                    break;
-            }
-            
-            highlighted = before + highlightedToken + after;
+        // Extract and protect strings
+        highlighted = highlighted.replace(/"([^"\\]|\\.)*"/g, (match) => {
+            const index = protectedStrings.length;
+            protectedStrings.push(`\`${match}\``);
+            return `__STRING_${index}__`;
+        });
+        
+        highlighted = highlighted.replace(/'([^'\\]|\\.)*'/g, (match) => {
+            const index = protectedStrings.length;
+            protectedStrings.push(`\`${match}\``);
+            return `__STRING_${index}__`;
+        });
+
+        // Extract and protect comments
+        highlighted = highlighted.replace(/\/\/.*$/gm, (match) => {
+            const index = protectedComments.length;
+            protectedComments.push(`*${match}*`);
+            return `__COMMENT_${index}__`;
+        });
+        
+        highlighted = highlighted.replace(/\/\*[\s\S]*?\*\//g, (match) => {
+            const index = protectedComments.length;
+            protectedComments.push(`*${match}*`);
+            return `__COMMENT_${index}__`;
+        });
+
+        // Highlight numbers
+        highlighted = highlighted.replace(/\b\d+(\.\d+)?([eE][+-]?\d+)?[fFdDlL]?\b/g, '`$&`');
+        highlighted = highlighted.replace(/\b0[xX][0-9a-fA-F]+[lL]?\b/g, '`$&`');
+        highlighted = highlighted.replace(/\b0[bB][01]+[lL]?\b/g, '`$&`');
+
+        // Highlight operators (order matters - longer operators first)
+        highlighted = highlighted.replace(/\+=/g, '**+=**');
+        highlighted = highlighted.replace(/-=/g, '**-=**');
+        highlighted = highlighted.replace(/\*=/g, '***=**');
+        highlighted = highlighted.replace(/\/=/g, '**/=**');
+        highlighted = highlighted.replace(/<=/g, '**<=**');
+        highlighted = highlighted.replace(/>=/g, '**>=**');
+        highlighted = highlighted.replace(/==/g, '**==**');
+        highlighted = highlighted.replace(/!=/g, '**!=**');
+        highlighted = highlighted.replace(/->/g, '**->**');
+        highlighted = highlighted.replace(/::/g, '**::**');
+        highlighted = highlighted.replace(/&&/g, '**&&**');
+        highlighted = highlighted.replace(/\|\|/g, '**||**');
+
+        // Highlight keywords
+        for (const keyword of this.KEYWORDS) {
+            const regex = new RegExp(`\\b${keyword}\\b`, 'g');
+            highlighted = highlighted.replace(regex, `**${keyword}**`);
         }
-        
+
+        // Highlight literals
+        for (const literal of this.LITERALS) {
+            const regex = new RegExp(`\\b${literal}\\b`, 'g');
+            highlighted = highlighted.replace(regex, `***${literal}***`);
+        }
+
+        // Highlight primitives
+        for (const primitive of this.PRIMITIVES) {
+            const regex = new RegExp(`\\b${primitive}\\b`, 'g');
+            highlighted = highlighted.replace(regex, `**${primitive}**`);
+        }
+
+        // Highlight built-in classes
+        for (const className of this.BUILTIN_CLASSES) {
+            const regex = new RegExp(`\\b${className}\\b`, 'g');
+            highlighted = highlighted.replace(regex, `*${className}*`);
+        }
+
+        // Highlight stream methods
+        for (const method of this.STREAM_METHODS) {
+            const regex = new RegExp(`\\b${method}\\b`, 'g');
+            highlighted = highlighted.replace(regex, `*${method}*`);
+        }
+
+        // Restore protected strings
+        protectedStrings.forEach((str, index) => {
+            highlighted = highlighted.replace(`__STRING_${index}__`, str);
+        });
+
+        // Restore protected comments
+        protectedComments.forEach((comment, index) => {
+            highlighted = highlighted.replace(`__COMMENT_${index}__`, comment);
+        });
+
         return highlighted;
     }
 
@@ -567,16 +606,31 @@ export class JavaSyntaxHighlighter {
      * Extract lambda expressions from code
      */
     public static extractLambdaExpressions(code: string): string[] {
-        const lambdaRegex = /(\w+|\([^)]*\))\s*->\s*[^;,}]+/g;
-        const matches = code.match(lambdaRegex);
-        return matches || [];
+        const lambdaRegex = /(\w+|\([^)]*\))\s*->\s*[^;,})\n]*(?:\([^)]*\))?/g;
+        const matches: string[] = [];
+        let match;
+        
+        while ((match = lambdaRegex.exec(code)) !== null) {
+            let fullMatch = match[0];
+            // If the match ends with an opening parenthesis, try to find the closing one
+            if (fullMatch.endsWith('(')) {
+                const remainingCode = code.substring(match.index + fullMatch.length);
+                const closingParenMatch = remainingCode.match(/^[^)]*\)/);
+                if (closingParenMatch) {
+                    fullMatch += closingParenMatch[0];
+                }
+            }
+            matches.push(fullMatch);
+        }
+        
+        return matches;
     }
 
     /**
      * Extract method references from code
      */
     public static extractMethodReferences(code: string): string[] {
-        const methodRefRegex = /\w+::\w+/g;
+        const methodRefRegex = /[\w.]+::\w+/g;
         const matches = code.match(methodRefRegex);
         return matches || [];
     }

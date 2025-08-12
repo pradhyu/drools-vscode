@@ -183,6 +183,11 @@ export class GutterIndicatorManager {
         const lineMap = new Map<number, { diagnostics: vscode.Diagnostic[], highestSeverity: vscode.DiagnosticSeverity }>();
 
         diagnostics.forEach(diagnostic => {
+            // Handle malformed diagnostics gracefully
+            if (!diagnostic || !diagnostic.range || !diagnostic.range.start) {
+                return;
+            }
+            
             const line = diagnostic.range.start.line;
             if (!lineMap.has(line)) {
                 lineMap.set(line, { diagnostics: [], highestSeverity: diagnostic.severity });
@@ -519,7 +524,7 @@ export class GutterIndicatorManager {
      * Dispose all resources
      */
     public dispose(): void {
-        this.disposables.forEach(disposable => disposable.dispose());
+        this.disposables.forEach(disposable => disposable?.dispose());
         this.disposeDecorationTypes();
         this.indicators.clear();
     }

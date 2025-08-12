@@ -365,8 +365,9 @@ export class JavaAPIKnowledge {
                 }
             ]
         });
-    }    pr
-ivate static initializeCollectionClasses(): void {
+    }
+
+    private static initializeCollectionClasses(): void {
         // List interface
         this.classes.set('List', {
             name: 'List',
@@ -805,8 +806,9 @@ ivate static initializeCollectionClasses(): void {
             ],
             fields: []
         });
-    }    p
-rivate static initializeTimeClasses(): void {
+    }
+
+    private static initializeTimeClasses(): void {
         // LocalDate class
         this.classes.set('LocalDate', {
             name: 'LocalDate',
@@ -1162,8 +1164,9 @@ rivate static initializeTimeClasses(): void {
             ],
             fields: []
         });
-    }    pr
-ivate static initializeFunctionalClasses(): void {
+    }
+
+    private static initializeFunctionalClasses(): void {
         // Optional class
         this.classes.set('Optional', {
             name: 'Optional',
@@ -1511,8 +1514,9 @@ ivate static initializeFunctionalClasses(): void {
             ],
             fields: []
         });
-    }    pri
-vate static initializeUtilityClasses(): void {
+    }
+
+    private static initializeUtilityClasses(): void {
         // Arrays utility class
         this.classes.set('Arrays', {
             name: 'Arrays',

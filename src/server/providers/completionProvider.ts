@@ -325,6 +325,20 @@ export class DroolsCompletionProvider {
     private getThenClauseCompletions(context: CompletionContext, ast: DroolsAST): CompletionItem[] {
         const items: CompletionItem[] = [];
         
+        // Add functions from AST first (higher priority)
+        if (ast.functions) {
+            items.push(...ast.functions.map(func => ({
+                label: func.name,
+                kind: CompletionItemKind.Function,
+                detail: `${func.returnType} ${func.name}(${func.parameters.map(p => `${p.dataType} ${p.name}`).join(", ")})`,
+                documentation: {
+                    kind: MarkupKind.Markdown,
+                    value: `**Function**: ${func.name}\n\n**Returns**: ${func.returnType}`
+                },
+                insertText: func.name
+            })));
+        }
+        
         // Get comprehensive Java completions using our enhanced provider
         const javaCompletions = this.getJavaCompletions(context);
         items.push(...javaCompletions);
@@ -377,19 +391,7 @@ export class DroolsCompletionProvider {
             }
         );
         
-        // Add functions from AST
-        if (ast.functions) {
-            items.push(...ast.functions.map(func => ({
-                label: func.name,
-                kind: CompletionItemKind.Function,
-                detail: `${func.returnType} ${func.name}(${func.parameters.map(p => `${p.dataType} ${p.name}`).join(", ")})`,
-                documentation: {
-                    kind: MarkupKind.Markdown,
-                    value: `**Function**: ${func.name}\n\n**Returns**: ${func.returnType}`
-                },
-                insertText: func.name
-            })));
-        }
+
         
         // Add variables from when clause
         if (context.rule?.when?.conditions) {
@@ -409,14 +411,14 @@ export class DroolsCompletionProvider {
         // Add global variables if available
         if (ast.globals) {
             items.push(...ast.globals.map(global => ({
-                label: global.identifier,
+                label: global.name,
                 kind: CompletionItemKind.Variable,
                 detail: `Global: ${global.dataType}`,
                 documentation: {
                     kind: MarkupKind.Markdown,
-                    value: `**Global Variable**: ${global.identifier}\n\n**Type**: ${global.dataType}`
+                    value: `**Global Variable**: ${global.name}\n\n**Type**: ${global.dataType}`
                 },
-                insertText: global.identifier
+                insertText: global.name
             })));
         }
         

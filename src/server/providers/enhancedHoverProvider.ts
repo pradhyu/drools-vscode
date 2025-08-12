@@ -9,7 +9,7 @@ import { DroolsAST } from '../parser/ast';
 import { ParseResult } from '../parser/droolsParser';
 import { DroolsDocumentation, DroolsKeywordDoc, DroolsFunctionDoc } from '../documentation/droolsDocumentation';
 import { JavaDocumentation, JavaClassDoc, JavaMethodDoc } from '../documentation/javaDocumentation';
-import { JavaKeywords, JavaKeywordDoc } from '../documentation/javaKeywords';
+import { JavaKeywords } from '../documentation/javaKeywords';
 import { EnhancedSyntaxHighlighter } from '../utils/enhancedSyntaxHighlighter';
 
 export interface HoverContext {
@@ -188,15 +188,51 @@ export class EnhancedHoverProvider {
         // Initialize Java keywords if not already done
         JavaKeywords.initialize();
         
-        const keywordDoc = JavaKeywords.getKeywordDoc(context.word);
-        if (!keywordDoc) return null;
+        // Check if it's a Java keyword
+        if (JavaKeywords.isKeyword(context.word)) {
+            const content: MarkupContent = {
+                kind: MarkupKind.Markdown,
+                value: `### ☕ Java Keyword: \`${context.word}\`
 
-        const content = this.formatJavaKeywordHover(keywordDoc);
+**Description:** Java language keyword
+
+**Usage:** This is a reserved word in Java with special meaning to the compiler.
+
+**Example:**
+\`\`\`java
+${this.getJavaKeywordExample(context.word)}
+\`\`\``
+            };
+            
+            return {
+                contents: content,
+                range: this.getWordRange(context)
+            };
+        }
         
-        return {
-            contents: content,
-            range: this.getWordRange(context)
-        };
+        // Check if it's a Java literal
+        if (JavaKeywords.isLiteral(context.word)) {
+            const content: MarkupContent = {
+                kind: MarkupKind.Markdown,
+                value: `### ☕ Java Literal: \`${context.word}\`
+
+**Description:** Java literal value
+
+**Usage:** This is a built-in literal value in Java.
+
+**Example:**
+\`\`\`java
+${this.getJavaLiteralExample(context.word)}
+\`\`\``
+            };
+            
+            return {
+                contents: content,
+                range: this.getWordRange(context)
+            };
+        }
+        
+        return null;
     }
 
     /**
@@ -375,38 +411,6 @@ ${methodDoc.example}
     }
 
     /**
-     * Format Java keyword hover content
-     */
-    private static formatJavaKeywordHover(keywordDoc: JavaKeywordDoc): MarkupContent {
-        let content = `### ☕ Java ${keywordDoc.category === 'primitive' ? 'Primitive Type' : keywordDoc.category === 'keyword' ? 'Keyword' : 'Class'}: \`${keywordDoc.keyword}\`
-
-**Category:** ${keywordDoc.category}
-
-**Description:** ${keywordDoc.description}`;
-
-        if (keywordDoc.syntax) {
-            content += `\n\n**Syntax:**
-\`\`\`java
-${keywordDoc.syntax}
-\`\`\``;
-        }
-
-        content += `\n\n**Example:**
-\`\`\`java
-${keywordDoc.example}
-\`\`\``;
-
-        if (keywordDoc.since) {
-            content += `\n\n**Since:** ${keywordDoc.since}`;
-        }
-
-        return {
-            kind: MarkupKind.Markdown,
-            value: content
-        };
-    }
-
-    /**
      * Format Java class hover content
      */
     private static formatJavaClassHover(classDoc: JavaClassDoc): MarkupContent {
@@ -450,5 +454,64 @@ ${classDoc.example}
             start: { line: context.lineNumber, character: wordStart },
             end: { line: context.lineNumber, character: wordEnd }
         };
+    }
+
+    /**
+     * Get Java keyword example
+     */
+    private static getJavaKeywordExample(keyword: string): string {
+        const examples: { [key: string]: string } = {
+            'if': 'if (condition) { /* code */ }',
+            'else': 'if (condition) { /* code */ } else { /* other code */ }',
+            'for': 'for (int i = 0; i < 10; i++) { /* code */ }',
+            'while': 'while (condition) { /* code */ }',
+            'try': 'try { /* code */ } catch (Exception e) { /* handle */ }',
+            'catch': 'try { /* code */ } catch (Exception e) { /* handle */ }',
+            'finally': 'try { /* code */ } finally { /* cleanup */ }',
+            'return': 'return value;',
+            'break': 'for (int i = 0; i < 10; i++) { if (condition) break; }',
+            'continue': 'for (int i = 0; i < 10; i++) { if (condition) continue; }',
+            'new': 'List<String> list = new ArrayList<>();',
+            'this': 'this.field = value;',
+            'super': 'super.method();',
+            'static': 'public static void main(String[] args) { }',
+            'final': 'final String CONSTANT = "value";',
+            'public': 'public class MyClass { }',
+            'private': 'private String field;',
+            'protected': 'protected void method() { }',
+            'class': 'public class MyClass { }',
+            'interface': 'public interface MyInterface { }',
+            'extends': 'public class Child extends Parent { }',
+            'implements': 'public class MyClass implements MyInterface { }',
+            'var': 'var list = new ArrayList<String>();',
+            'instanceof': 'if (obj instanceof String) { }',
+            'synchronized': 'synchronized (lock) { /* code */ }',
+            'volatile': 'private volatile boolean flag;',
+            'transient': 'private transient String temp;',
+            'abstract': 'public abstract class AbstractClass { }',
+            'enum': 'public enum Color { RED, GREEN, BLUE }',
+            'switch': 'switch (value) { case 1: break; default: break; }',
+            'case': 'switch (value) { case 1: /* code */ break; }',
+            'default': 'switch (value) { default: /* code */ break; }',
+            'throw': 'throw new IllegalArgumentException("message");',
+            'throws': 'public void method() throws Exception { }',
+            'import': 'import java.util.List;',
+            'package': 'package com.example;'
+        };
+        
+        return examples[keyword] || `${keyword} example;`;
+    }
+
+    /**
+     * Get Java literal example
+     */
+    private static getJavaLiteralExample(literal: string): string {
+        const examples: { [key: string]: string } = {
+            'true': 'boolean flag = true;',
+            'false': 'boolean flag = false;',
+            'null': 'String str = null; if (str != null) { /* code */ }'
+        };
+        
+        return examples[literal] || `${literal} example;`;
     }
 }
