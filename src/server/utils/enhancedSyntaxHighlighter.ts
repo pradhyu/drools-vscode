@@ -177,18 +177,81 @@ export class EnhancedSyntaxHighlighter {
     }
 
     /**
-     * Highlight Java code with enhanced formatting
+     * Highlight Java code with comprehensive modern Java support
      */
     private static highlightJava(code: string): string {
         let highlighted = code;
 
-        // Java keywords with stronger emphasis
+        // Modern Java keywords (including Java 8+ features)
         const javaKeywords = [
+            // Core keywords
             'public', 'private', 'protected', 'static', 'final', 'abstract',
             'class', 'interface', 'extends', 'implements', 'import', 'package',
             'if', 'else', 'for', 'while', 'do', 'switch', 'case', 'default',
             'try', 'catch', 'finally', 'throw', 'throws', 'return', 'break', 'continue',
-            'new', 'this', 'super', 'null', 'true', 'false', 'instanceof', 'void'
+            'new', 'this', 'super', 'instanceof', 'synchronized', 'volatile', 'transient',
+            'native', 'strictfp',
+            // Modern Java keywords (Java 10+)
+            'var', 'yield',
+            // Java 14+ keywords
+            'record', 'sealed', 'permits', 'non-sealed'
+        ];
+
+        // Java literals and special values
+        const javaLiterals = ['null', 'true', 'false'];
+
+        // Java primitive types
+        const javaPrimitives = ['boolean', 'byte', 'char', 'short', 'int', 'long', 'float', 'double', 'void'];
+
+        // Modern Java built-in classes (comprehensive list)
+        const javaBuiltinClasses = [
+            // Core classes
+            'String', 'Object', 'Class', 'System', 'Math', 'Objects', 'Arrays',
+            'StringBuilder', 'StringBuffer',
+            // Wrapper classes
+            'Integer', 'Long', 'Double', 'Float', 'Boolean', 'Character', 'Byte', 'Short',
+            'BigDecimal', 'BigInteger', 'Number',
+            // Collections Framework
+            'Collection', 'List', 'Set', 'Map', 'Queue', 'Deque',
+            'ArrayList', 'LinkedList', 'Vector',
+            'HashSet', 'LinkedHashSet', 'TreeSet', 'EnumSet',
+            'HashMap', 'LinkedHashMap', 'TreeMap', 'EnumMap', 'WeakHashMap', 'IdentityHashMap',
+            'ArrayDeque', 'PriorityQueue',
+            'Collections', 'Iterator', 'ListIterator', 'Enumeration',
+            // Java 8+ Functional Programming
+            'Optional', 'Stream', 'Collectors', 'Collector',
+            'Function', 'Predicate', 'Consumer', 'Supplier', 'BiFunction', 'BiPredicate', 'BiConsumer',
+            'UnaryOperator', 'BinaryOperator', 'Comparator',
+            // Time API (Java 8+)
+            'LocalDate', 'LocalTime', 'LocalDateTime', 'ZonedDateTime', 'OffsetDateTime',
+            'Instant', 'Duration', 'Period', 'ZoneId', 'ZoneOffset', 'Clock',
+            'DateTimeFormatter', 'TemporalAdjusters', 'ChronoUnit', 'Month', 'DayOfWeek',
+            // Concurrency
+            'Thread', 'Runnable', 'Callable', 'Future', 'CompletableFuture', 'CompletionStage',
+            'ExecutorService', 'Executors', 'ThreadLocal', 'AtomicInteger', 'AtomicLong',
+            'CountDownLatch', 'CyclicBarrier', 'Semaphore', 'ReentrantLock',
+            // I/O and NIO
+            'File', 'Path', 'Paths', 'Files', 'FileSystem', 'FileSystems',
+            'InputStream', 'OutputStream', 'Reader', 'Writer',
+            'BufferedReader', 'BufferedWriter', 'FileReader', 'FileWriter',
+            'FileInputStream', 'FileOutputStream', 'ByteArrayInputStream', 'ByteArrayOutputStream',
+            'Scanner', 'PrintWriter', 'PrintStream',
+            // Exceptions
+            'Exception', 'RuntimeException', 'Error', 'Throwable',
+            'IllegalArgumentException', 'IllegalStateException', 'NullPointerException',
+            'IndexOutOfBoundsException', 'UnsupportedOperationException', 'ClassCastException',
+            'NumberFormatException', 'IOException', 'FileNotFoundException',
+            // Annotations
+            'Override', 'Deprecated', 'SuppressWarnings', 'FunctionalInterface', 'SafeVarargs',
+            'Retention', 'Target', 'Documented', 'Inherited', 'Repeatable', 'Native',
+            // Reflection
+            'Method', 'Field', 'Constructor', 'Modifier', 'Annotation',
+            // Regular Expressions
+            'Pattern', 'Matcher',
+            // Networking
+            'URL', 'URI', 'Socket', 'ServerSocket', 'HttpURLConnection',
+            // Serialization
+            'Serializable', 'Externalizable', 'ObjectInputStream', 'ObjectOutputStream'
         ];
 
         // Highlight keywords with bold formatting
@@ -197,34 +260,127 @@ export class EnhancedSyntaxHighlighter {
             highlighted = highlighted.replace(regex, `**${keyword}**`);
         });
 
-        // Java built-in types with italic formatting
-        const javaTypes = [
-            'String', 'Integer', 'Boolean', 'Double', 'Float', 'Long', 'Short',
-            'Byte', 'Character', 'Object', 'List', 'Map', 'Set', 'ArrayList',
-            'HashMap', 'HashSet', 'System', 'Math', 'Collections'
-        ];
-
-        javaTypes.forEach(type => {
-            const regex = new RegExp('\\b' + type + '\\b', 'g');
-            highlighted = highlighted.replace(regex, `*${type}*`);
+        // Highlight literals with special formatting
+        javaLiterals.forEach(literal => {
+            const regex = new RegExp('\\b' + literal + '\\b', 'g');
+            highlighted = highlighted.replace(regex, `***${literal}***`);
         });
+
+        // Highlight primitive types with emphasis
+        javaPrimitives.forEach(primitive => {
+            const regex = new RegExp('\\b' + primitive + '\\b', 'g');
+            highlighted = highlighted.replace(regex, `**${primitive}**`);
+        });
+
+        // Highlight built-in classes with italic formatting
+        javaBuiltinClasses.forEach(className => {
+            const regex = new RegExp('\\b' + className + '\\b', 'g');
+            highlighted = highlighted.replace(regex, `*${className}*`);
+        });
+
+        // Lambda expressions and method references (Java 8+)
+        highlighted = highlighted.replace(/(\w+)\s*->/g, '**$1** **->**');
+        highlighted = highlighted.replace(/\(\s*([^)]*)\s*\)\s*->/g, '**($1)** **->**');
+        highlighted = highlighted.replace(/(\w+)::([\w<>]+)/g, '*$1*::**$2**');
+
+        // Stream operations highlighting
+        const streamMethods = [
+            'filter', 'map', 'flatMap', 'distinct', 'sorted', 'peek', 'limit', 'skip',
+            'forEach', 'forEachOrdered', 'toArray', 'reduce', 'collect', 'min', 'max',
+            'count', 'anyMatch', 'allMatch', 'noneMatch', 'findFirst', 'findAny',
+            'parallel', 'sequential', 'unordered'
+        ];
+        
+        streamMethods.forEach(method => {
+            const regex = new RegExp('\\.(' + method + ')\\(', 'g');
+            highlighted = highlighted.replace(regex, '.**$1**(');
+        });
+
+        // Generic type parameters
+        highlighted = highlighted.replace(/<([^<>]+)>/g, '<***$1***>');
+
+        // Annotations
+        highlighted = highlighted.replace(/@(\w+)(\([^)]*\))?/g, '***@$1***$2');
 
         // Method calls with special formatting
         highlighted = highlighted.replace(/\.([a-zA-Z_][a-zA-Z0-9_]*)\(/g, '.**$1**(');
 
-        // String literals with backticks
-        highlighted = highlighted.replace(/"([^"]*)"/g, '`"$1"`');
-        highlighted = highlighted.replace(/'([^']*)'/g, "`'$1'`");
+        // Static method calls
+        highlighted = highlighted.replace(/([A-Z][a-zA-Z0-9_]*)\.([a-zA-Z_][a-zA-Z0-9_]*)\(/g, '*$1*.**$2**(');
 
-        // Numbers with backticks
-        highlighted = highlighted.replace(/\b\d+(\.\d+)?[fFdDlL]?\b/g, '`$&`');
+        // String literals with enhanced formatting
+        // Text blocks (Java 15+)
+        highlighted = highlighted.replace(/"""([\s\S]*?)"""/g, '`"""$1"""`');
+        // Regular strings
+        highlighted = highlighted.replace(/"([^"\\]|\\.)*"/g, '`$&`');
+        // Character literals
+        highlighted = highlighted.replace(/'([^'\\]|\\.)*'/g, '`$&`');
 
-        // Operators with bold formatting
-        highlighted = highlighted.replace(/([=!<>]=?|[+\-*/%]|&&|\|\||!)/g, '**$1**');
+        // Numeric literals with enhanced support
+        // Hexadecimal numbers
+        highlighted = highlighted.replace(/\b0[xX][0-9a-fA-F]+[lL]?\b/g, '`$&`');
+        // Binary numbers (Java 7+)
+        highlighted = highlighted.replace(/\b0[bB][01]+[lL]?\b/g, '`$&`');
+        // Octal numbers
+        highlighted = highlighted.replace(/\b0[0-7]+[lL]?\b/g, '`$&`');
+        // Decimal numbers with underscores (Java 7+)
+        highlighted = highlighted.replace(/\b\d+(_\d+)*(\.\d+(_\d+)*)?([eE][+-]?\d+(_\d+)*)?[fFdDlL]?\b/g, '`$&`');
+        // Regular decimal numbers
+        highlighted = highlighted.replace(/\b\d+(\.\d+)?([eE][+-]?\d+)?[fFdDlL]?\b/g, '`$&`');
 
-        // Comments with italic formatting
+        // Operators with enhanced formatting
+        // Lambda arrow
+        highlighted = highlighted.replace(/->/g, '**->**');
+        // Method reference
+        highlighted = highlighted.replace(/::/g, '**::**');
+        // Comparison operators
+        highlighted = highlighted.replace(/(==|!=|<=|>=|<|>)/g, '**$1**');
+        // Logical operators
+        highlighted = highlighted.replace(/(&&|\|\||!(?!=))/g, '**$1**');
+        // Assignment operators
+        highlighted = highlighted.replace(/(\+=|-=|\*=|\/=|%=|&=|\|=|\^=|<<=|>>=|>>>=|=(?!=))/g, '**$1**');
+        // Arithmetic operators
+        highlighted = highlighted.replace(/([+\-*/%](?!=))/g, '**$1**');
+        // Bitwise operators
+        highlighted = highlighted.replace(/(&(?!&)|\|(?!\|)|\^|~|<<|>>>?)/g, '**$1**');
+        // Ternary operator
+        highlighted = highlighted.replace(/\?/g, '**?**');
+        highlighted = highlighted.replace(/:/g, '**:**');
+
+        // Comments with enhanced formatting
+        // Single-line comments
         highlighted = highlighted.replace(/\/\/.*$/gm, '*$&*');
+        // Multi-line comments
         highlighted = highlighted.replace(/\/\*[\s\S]*?\*\//g, '*$&*');
+        // Javadoc comments
+        highlighted = highlighted.replace(/\/\*\*[\s\S]*?\*\//g, '***$&***');
+
+        // Variable declarations with var keyword (Java 10+)
+        highlighted = highlighted.replace(/\bvar\s+([a-zA-Z_][a-zA-Z0-9_]*)/g, '**var** *$1*');
+
+        // Exception handling keywords
+        highlighted = highlighted.replace(/\b(try|catch|finally|throw|throws)\b/g, '**$1**');
+
+        // Control flow keywords
+        highlighted = highlighted.replace(/\b(if|else|switch|case|default|for|while|do|break|continue|return)\b/g, '**$1**');
+
+        // Access modifiers and other modifiers
+        highlighted = highlighted.replace(/\b(public|private|protected|static|final|abstract|synchronized|volatile|transient|native|strictfp)\b/g, '**$1**');
+
+        // Class and interface keywords
+        highlighted = highlighted.replace(/\b(class|interface|enum|extends|implements)\b/g, '**$1**');
+
+        // Package and import statements
+        highlighted = highlighted.replace(/\b(package|import)\b/g, '**$1**');
+
+        // instanceof operator
+        highlighted = highlighted.replace(/\binstanceof\b/g, '**instanceof**');
+
+        // this and super keywords
+        highlighted = highlighted.replace(/\b(this|super)\b/g, '**$1**');
+
+        // new keyword
+        highlighted = highlighted.replace(/\bnew\b/g, '**new**');
 
         return highlighted;
     }

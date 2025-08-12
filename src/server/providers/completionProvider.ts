@@ -320,18 +320,62 @@ export class DroolsCompletionProvider {
     }
 
     /**
-     * Get completions for then clause
+     * Get completions for then clause with comprehensive Java support
      */
     private getThenClauseCompletions(context: CompletionContext, ast: DroolsAST): CompletionItem[] {
         const items: CompletionItem[] = [];
         
-        // Add action keywords
-        items.push({
-            label: 'System.out.println',
-            kind: CompletionItemKind.Function,
-            detail: 'Print statement',
-            insertText: 'System.out.println("${1:message}");'
-        });
+        // Get comprehensive Java completions using our enhanced provider
+        const javaCompletions = this.getJavaCompletions(context);
+        items.push(...javaCompletions);
+        
+        // Add Drools-specific action keywords
+        items.push(
+            {
+                label: 'update',
+                kind: CompletionItemKind.Function,
+                detail: 'Update fact in working memory',
+                documentation: {
+                    kind: MarkupKind.Markdown,
+                    value: 'Updates a fact in working memory, triggering re-evaluation of rules'
+                },
+                insertText: 'update(${1:fact});',
+                insertTextFormat: InsertTextFormat.Snippet
+            },
+            {
+                label: 'insert',
+                kind: CompletionItemKind.Function,
+                detail: 'Insert new fact into working memory',
+                documentation: {
+                    kind: MarkupKind.Markdown,
+                    value: 'Inserts a new fact into working memory'
+                },
+                insertText: 'insert(${1:fact});',
+                insertTextFormat: InsertTextFormat.Snippet
+            },
+            {
+                label: 'retract',
+                kind: CompletionItemKind.Function,
+                detail: 'Remove fact from working memory',
+                documentation: {
+                    kind: MarkupKind.Markdown,
+                    value: 'Removes a fact from working memory'
+                },
+                insertText: 'retract(${1:fact});',
+                insertTextFormat: InsertTextFormat.Snippet
+            },
+            {
+                label: 'modify',
+                kind: CompletionItemKind.Function,
+                detail: 'Modify fact properties',
+                documentation: {
+                    kind: MarkupKind.Markdown,
+                    value: 'Modifies fact properties and updates working memory'
+                },
+                insertText: 'modify(${1:fact}) {\n    ${2:property} = ${3:value}\n}',
+                insertTextFormat: InsertTextFormat.Snippet
+            }
+        );
         
         // Add functions from AST
         if (ast.functions) {
@@ -339,6 +383,10 @@ export class DroolsCompletionProvider {
                 label: func.name,
                 kind: CompletionItemKind.Function,
                 detail: `${func.returnType} ${func.name}(${func.parameters.map(p => `${p.dataType} ${p.name}`).join(", ")})`,
+                documentation: {
+                    kind: MarkupKind.Markdown,
+                    value: `**Function**: ${func.name}\n\n**Returns**: ${func.returnType}`
+                },
                 insertText: func.name
             })));
         }
@@ -350,11 +398,57 @@ export class DroolsCompletionProvider {
                 label: variable.name,
                 kind: CompletionItemKind.Variable,
                 detail: `Variable: ${variable.type || 'unknown'}`,
+                documentation: {
+                    kind: MarkupKind.Markdown,
+                    value: `**Variable**: ${variable.name}\n\n**Type**: ${variable.type || 'unknown'}`
+                },
                 insertText: variable.name
             })));
         }
         
+        // Add global variables if available
+        if (ast.globals) {
+            items.push(...ast.globals.map(global => ({
+                label: global.identifier,
+                kind: CompletionItemKind.Variable,
+                detail: `Global: ${global.dataType}`,
+                documentation: {
+                    kind: MarkupKind.Markdown,
+                    value: `**Global Variable**: ${global.identifier}\n\n**Type**: ${global.dataType}`
+                },
+                insertText: global.identifier
+            })));
+        }
+        
         return items;
+    }
+
+    /**
+     * Get comprehensive Java completions for then clause
+     */
+    private getJavaCompletions(context: CompletionContext): CompletionItem[] {
+        // Create a mock document and position for the Java completion provider
+        const mockDocument = {
+            getText: () => context.beforeCursor + context.afterCursor,
+            uri: 'mock://java-completion'
+        } as TextDocument;
+        
+        const mockPosition = {
+            line: 0,
+            character: context.beforeCursor.length
+        };
+        
+        // Determine trigger character
+        const triggerChar = context.beforeCursor.endsWith('.') ? '.' : undefined;
+        
+        // Get Java completions
+        const javaResult = JavaCompletionProvider.provideCompletions(
+            mockDocument,
+            mockPosition,
+            triggerChar
+        );
+        
+        return javaResult.items;
     }
 
     /**

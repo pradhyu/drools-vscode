@@ -1055,14 +1055,14 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
             }
         }
 
-        // Java type capitalization errors - ONLY in variable declarations, NOT in variable names
-        // Pattern: looks for "type variableName" but excludes "$variableName" usage
+        // Java type capitalization errors - ONLY for lowercase types in variable declarations
+        // Pattern: looks for lowercase "type variableName" but excludes already correct capitalization
         const javaTypeDeclarationErrors = [
-            { pattern: /\bstring\s+[a-zA-Z_][a-zA-Z0-9_]*\s*=/gi, correct: 'String' },
-            { pattern: /\bobject\s+[a-zA-Z_][a-zA-Z0-9_]*\s*=/gi, correct: 'Object' },
-            { pattern: /\binteger\s+[a-zA-Z_][a-zA-Z0-9_]*\s*=/gi, correct: 'Integer' },
-            { pattern: /\bdouble\s+[a-zA-Z_][a-zA-Z0-9_]*\s*=/gi, correct: 'Double' },
-            { pattern: /\bboolean\s+[a-zA-Z_][a-zA-Z0-9_]*\s*=/gi, correct: 'Boolean' }
+            { pattern: /\bstring\s+[a-zA-Z_][a-zA-Z0-9_]*\s*=/g, correct: 'String', incorrect: 'string' },
+            { pattern: /\bobject\s+[a-zA-Z_][a-zA-Z0-9_]*\s*=/g, correct: 'Object', incorrect: 'object' },
+            { pattern: /\binteger\s+[a-zA-Z_][a-zA-Z0-9_]*\s*=/g, correct: 'Integer', incorrect: 'integer' },
+            { pattern: /\bdouble\s+[a-zA-Z_][a-zA-Z0-9_]*\s*=/g, correct: 'Double', incorrect: 'double' },
+            { pattern: /\bboolean\s+[a-zA-Z_][a-zA-Z0-9_]*\s*=/g, correct: 'Boolean', incorrect: 'boolean' }
         ];
 
         for (const error of javaTypeDeclarationErrors) {
@@ -1072,44 +1072,74 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
                 const typeWord = match[0].split(/\s+/)[0]; // Get just the type word
                 const typeIndex = match.index;
 
-                const positionInfo = `[Line ${lineNumber + 1}, Col ${typeIndex + 1}-${typeIndex + typeWord.length}]`;
-                diagnostics.push({
-                    severity: DiagnosticSeverity.Warning,
-                    range: {
-                        start: { line: lineNumber, character: typeIndex },
-                        end: { line: lineNumber, character: typeIndex + typeWord.length }
-                    },
-                    message: `Java type should be capitalized: "${typeWord}" should be "${error.correct}" ${positionInfo}`,
-                    source: 'drools-syntax',
-                    code: 'java-capitalization'
-                });
+                // Only flag if the type is actually lowercase (not already correct)
+                if (typeWord.toLowerCase() === error.incorrect && typeWord !== error.correct) {
+                    const positionInfo = `[Line ${lineNumber + 1}, Col ${typeIndex + 1}-${typeIndex + typeWord.length}]`;
+                    diagnostics.push({
+                        severity: DiagnosticSeverity.Warning,
+                        range: {
+                            start: { line: lineNumber, character: typeIndex },
+                            end: { line: lineNumber, character: typeIndex + typeWord.length }
+                        },
+                        message: `Java type should be capitalized: "${typeWord}" should be "${error.correct}" ${positionInfo}`,
+                        source: 'drools-syntax',
+                        code: 'java-capitalization'
+                    });
+                }
             }
         }
     }
 
     /**
-     * Validate Java statement structure
+     * Validate Java statement structure with improved multi-line support
      */
     private validateJavaStatementStructure(line: string, lineNumber: number, diagnostics: Diagnostic[]): void {
-        // Check for statements that should end with semicolon
-        const needsSemicolon = /^[^\/\*].*[^;}\s]$/.test(line) &&
-            !line.includes('{') &&
-            !line.includes('}') &&
-            !line.startsWith('if') &&
-            !line.startsWith('for') &&
-            !line.startsWith('while') &&
-            !line.startsWith('try') &&
-            !line.startsWith('catch') &&
-            !line.startsWith('finally');
-
-        if (needsSemicolon && (line.includes('=') || line.includes('(') || line.includes('.'))) {
+        const trimmed = line.trim();
+        
+        // Skip empty lines, comments, and obvious non-statements
+        if (trimmed === '' || trimmed.startsWith('//') || trimmed.startsWith('/*') || trimmed.startsWith('*')) {
+            return;
+        }
+        
+        // Skip control structures and blocks
+        if (/^(if|for|while|switch|try|catch|finally|else)\s*[\(\{]/.test(trimmed) ||
+            trimmed.endsWith('{') || trimmed.endsWith('}') || trimmed === '}') {
+            return;
+        }
+        
+        // Skip Drools-specific constructs
+        if (trimmed.includes('modify(') || trimmed.includes('insert(') || 
+            trimmed.includes('update(') || trimmed.includes('retract(') ||
+            trimmed.includes('delete(')) {
+            return;
+        }
+        
+        // Skip multi-line constructs that continue on next line
+        if (trimmed.includes('->') || trimmed.includes('::') ||
+            /\.(stream|filter|map|collect|forEach|reduce)\s*\(\s*$/.test(trimmed) ||
+            /[+\-*/%&|^<>=!,.]$/.test(trimmed) ||
+            trimmed.endsWith('(') || trimmed.endsWith(',')) {
+            return;
+        }
+        
+        // Skip generic type declarations and complex expressions
+        if ((trimmed.includes('<') && trimmed.includes('>')) ||
+            trimmed.includes('new ') && !trimmed.includes('=') ||
+            /^[A-Z][a-zA-Z0-9_]*<.*>/.test(trimmed)) {
+            return;
+        }
+        
+        // Only flag very simple, obvious statements that clearly need semicolons
+        const isSimpleStatement = this.isObviouslyMissingSemicolon(trimmed);
+        
+        if (isSimpleStatement && !trimmed.endsWith(';')) {
             diagnostics.push({
-                severity: DiagnosticSeverity.Error,
+                severity: DiagnosticSeverity.Warning, // Changed to warning instead of error
                 range: {
                     start: { line: lineNumber, character: line.length - 1 },
                     end: { line: lineNumber, character: line.length }
                 },
-                message: 'Java statement must end with semicolon (;)',
+                message: 'Java statement should end with semicolon (;)',
                 source: 'drools-syntax',
                 code: 'missing-semicolon'
             });
@@ -1252,48 +1282,23 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
     }
 
     /**
-     * Validate semicolons in RHS Java statements
+     * Validate semicolons in RHS Java statements with enhanced multi-line support
      */
     private validateSemicolonsInRHS(actions: string, thenClause: ThenNode, diagnostics: Diagnostic[]): void {
-        const lines = actions.split('\n');
-        for (let i = 0; i < lines.length; i++) {
-            const line = lines[i].trim();
-            if (line === '') continue;
-
-            // Skip comments and control structures
-            if (line.startsWith('//') || line.startsWith('/*') ||
-                line.startsWith('if') || line.startsWith('for') || line.startsWith('while') ||
-                line.endsWith('{') || line === '}') {
-                continue;
-            }
-
-            // Check if line looks like a Java statement but missing semicolon
-            // But be very lenient for Drools-specific constructs and method calls within modify blocks
-            if (this.looksLikeJavaStatement(line) && !line.endsWith(';')) {
-                // Don't flag Drools-specific constructs that don't need semicolons
-                const isDroolsConstruct = line.includes('modify(') ||
-                    line.includes('insert(') ||
-                    line.includes('update(') ||
-                    line.includes('retract(') ||
-                    line.includes('delete(') ||
-                    line.trim().endsWith('{') ||
-                    line.trim().endsWith('}') ||
-                    line.trim().endsWith(',');
-
-                // Also don't flag method calls that are inside modify blocks or similar constructs
-                const isMethodCallInBlock = line.trim().match(/^\s*[a-zA-Z_$][a-zA-Z0-9_$]*\s*\(/);
-
-                // Be very conservative - only flag obvious cases where semicolon is clearly missing
-                const isObviouslyMissingSemicolon = line.includes(' = ') && !line.includes('(') && !isDroolsConstruct;
-
-                if (isObviouslyMissingSemicolon) {
+        // Parse Java statements considering multi-line expressions
+        const javaStatements = this.parseJavaStatements(actions);
+        
+        for (const statement of javaStatements) {
+            if (this.shouldHaveSemicolon(statement) && !statement.text.trim().endsWith(';')) {
+                // Only flag very obvious cases to avoid false positives
+                if (this.isObviouslyMissingSemicolon(statement.text)) {
                     diagnostics.push({
-                        severity: DiagnosticSeverity.Information, // Changed to info
+                        severity: DiagnosticSeverity.Information,
                         range: {
-                            start: { line: thenClause.range.start.line + i, character: 0 },
-                            end: { line: thenClause.range.start.line + i, character: line.length }
+                            start: { line: thenClause.range.start.line + statement.startLine, character: 0 },
+                            end: { line: thenClause.range.start.line + statement.endLine, character: statement.text.split('\n').pop()?.length || 0 }
                         },
-                        message: `Consider adding semicolon to Java assignment: "${line}"`,
+                        message: `Consider adding semicolon to Java statement`,
                         source: 'drools-semantic'
                     });
                 }
@@ -1302,14 +1307,244 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
     }
 
     /**
+     * Parse Java statements from RHS actions, handling multi-line expressions
+     */
+    private parseJavaStatements(actions: string): Array<{text: string, startLine: number, endLine: number}> {
+        const statements: Array<{text: string, startLine: number, endLine: number}> = [];
+        const lines = actions.split('\n');
+        let currentStatement = '';
+        let startLine = 0;
+        let braceDepth = 0;
+        let parenDepth = 0;
+        let inString = false;
+        let stringChar = '';
+        
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            let j = 0;
+            
+            while (j < line.length) {
+                const char = line[j];
+                const nextChar = j + 1 < line.length ? line[j + 1] : '';
+                
+                // Handle string literals
+                if (!inString && (char === '"' || char === "'")) {
+                    inString = true;
+                    stringChar = char;
+                } else if (inString && char === stringChar && line[j - 1] !== '\\') {
+                    inString = false;
+                    stringChar = '';
+                }
+                
+                // Skip if we're inside a string
+                if (inString) {
+                    j++;
+                    continue;
+                }
+                
+                // Handle comments
+                if (char === '/' && nextChar === '/') {
+                    // Single-line comment - skip rest of line
+                    break;
+                } else if (char === '/' && nextChar === '*') {
+                    // Multi-line comment - skip until */
+                    j += 2;
+                    while (j < line.length - 1) {
+                        if (line[j] === '*' && line[j + 1] === '/') {
+                            j += 2;
+                            break;
+                        }
+                        j++;
+                    }
+                    continue;
+                }
+                
+                // Track braces and parentheses
+                if (char === '{') braceDepth++;
+                else if (char === '}') braceDepth--;
+                else if (char === '(') parenDepth++;
+                else if (char === ')') parenDepth--;
+                
+                j++;
+            }
+            
+            // Add line to current statement
+            if (currentStatement === '') {
+                startLine = i;
+            }
+            currentStatement += (currentStatement ? '\n' : '') + line;
+            
+            // Check if statement is complete
+            const trimmedLine = line.trim();
+            if (trimmedLine !== '' && 
+                braceDepth === 0 && 
+                parenDepth === 0 && 
+                (trimmedLine.endsWith(';') || 
+                 trimmedLine.endsWith('}') || 
+                 this.isCompleteJavaStatement(currentStatement))) {
+                
+                statements.push({
+                    text: currentStatement,
+                    startLine: startLine,
+                    endLine: i
+                });
+                currentStatement = '';
+            }
+        }
+        
+        // Add any remaining statement
+        if (currentStatement.trim() !== '') {
+            statements.push({
+                text: currentStatement,
+                startLine: startLine,
+                endLine: lines.length - 1
+            });
+        }
+        
+        return statements;
+    }
+
+    /**
+     * Check if a Java statement is complete (doesn't need continuation)
+     */
+    private isCompleteJavaStatement(statement: string): boolean {
+        const trimmed = statement.trim();
+        
+        // Drools-specific constructs that don't need semicolons
+        if (trimmed.includes('modify(') || trimmed.includes('insert(') || 
+            trimmed.includes('update(') || trimmed.includes('retract(') ||
+            trimmed.includes('delete(')) {
+            return true;
+        }
+        
+        // Control structures
+        if (/^(if|for|while|switch|try|catch|finally)\s*\(/.test(trimmed)) {
+            return true;
+        }
+        
+        // Method calls that are part of fluent interfaces (like streams)
+        if (trimmed.includes('.stream()') || trimmed.includes('.filter(') || 
+            trimmed.includes('.map(') || trimmed.includes('.collect(')) {
+            return false; // These usually continue on next line
+        }
+        
+        return false;
+    }
+
+    /**
+     * Check if a statement should have a semicolon
+     */
+    private shouldHaveSemicolon(statement: {text: string, startLine: number, endLine: number}): boolean {
+        const trimmed = statement.text.trim();
+        
+        // Skip empty statements
+        if (trimmed === '') return false;
+        
+        // Skip comments
+        if (trimmed.startsWith('//') || trimmed.startsWith('/*')) return false;
+        
+        // Skip Drools-specific constructs
+        if (trimmed.includes('modify(') || trimmed.includes('insert(') || 
+            trimmed.includes('update(') || trimmed.includes('retract(') ||
+            trimmed.includes('delete(')) {
+            return false;
+        }
+        
+        // Skip control structures
+        if (/^(if|for|while|switch|try|catch|finally)\s*\(/.test(trimmed)) {
+            return false;
+        }
+        
+        // Skip block statements
+        if (trimmed.endsWith('{') || trimmed.endsWith('}')) {
+            return false;
+        }
+        
+        // Skip lambda expressions and method references
+        if (trimmed.includes('->') || trimmed.includes('::')) {
+            return false;
+        }
+        
+        return true;
+    }
+
+    /**
+     * Check if semicolon is obviously missing (very conservative)
+     */
+    private isObviouslyMissingSemicolon(statement: string): boolean {
+        const trimmed = statement.trim();
+        
+        // Skip any statement that might be part of a multi-line construct
+        if (trimmed.includes('.') || trimmed.includes('(') || trimmed.includes('<') || 
+            trimmed.includes('>') || trimmed.includes('[') || trimmed.includes(']') ||
+            trimmed.includes('{') || trimmed.includes('}') || trimmed.includes(',') ||
+            trimmed.includes('+') || trimmed.includes('-') || trimmed.includes('*') ||
+            trimmed.includes('/') || trimmed.includes('%') || trimmed.includes('&') ||
+            trimmed.includes('|') || trimmed.includes('^') || trimmed.includes('!') ||
+            trimmed.includes('?') || trimmed.includes(':') || trimmed.includes('~')) {
+            return false;
+        }
+        
+        // Only flag the most basic variable assignments and declarations
+        const verySimpleAssignment = /^[a-zA-Z_$][a-zA-Z0-9_$]*\s*=\s*[a-zA-Z0-9_$"']+$/.test(trimmed);
+        const verySimpleDeclaration = /^(int|String|boolean|double|float|long)\s+[a-zA-Z_$][a-zA-Z0-9_$]*\s*=\s*[a-zA-Z0-9_$"']+$/.test(trimmed);
+        
+        return verySimpleAssignment || verySimpleDeclaration;
+    }
+
+    /**
      * Check if a line looks like a Java statement that should end with semicolon
+     * Enhanced to handle modern Java syntax including generics, lambdas, and streams
      */
     private looksLikeJavaStatement(line: string): boolean {
-        // Method calls, assignments, variable declarations, etc.
-        return /^[a-zA-Z_$][a-zA-Z0-9_$]*\s*[\.\(]/.test(line) ||  // Method calls like System.out.println
-            /^[a-zA-Z_$][a-zA-Z0-9_$]*\s*=/.test(line) ||        // Assignments
-            /^\$[a-zA-Z_][a-zA-Z0-9_]*\./.test(line) ||          // Variable method calls
-            /^(int|String|boolean|double|float|long)\s+/.test(line); // Variable declarations
+        const trimmed = line.trim();
+        
+        // Skip empty lines and comments
+        if (trimmed === '' || trimmed.startsWith('//') || trimmed.startsWith('/*')) {
+            return false;
+        }
+        
+        // Skip Drools-specific constructs
+        if (trimmed.includes('modify(') || trimmed.includes('insert(') || 
+            trimmed.includes('update(') || trimmed.includes('retract(') ||
+            trimmed.includes('delete(')) {
+            return false;
+        }
+        
+        // Skip control structures and blocks
+        if (/^(if|for|while|switch|try|catch|finally)\s*\(/.test(trimmed) ||
+            trimmed.endsWith('{') || trimmed.endsWith('}')) {
+            return false;
+        }
+        
+        // Skip lambda expressions and method references
+        if (trimmed.includes('->') || trimmed.includes('::')) {
+            return false;
+        }
+        
+        // Skip stream operations that typically continue on next line
+        if (trimmed.includes('.stream()') || trimmed.includes('.filter(') || 
+            trimmed.includes('.map(') || trimmed.includes('.collect(') ||
+            trimmed.includes('.forEach(') || trimmed.includes('.reduce(')) {
+            return false;
+        }
+        
+        // Skip lines that end with operators or commas (continuation lines)
+        if (/[+\-*/%&|^<>=!,.]$/.test(trimmed)) {
+            return false;
+        }
+        
+        // Skip generic type declarations
+        if (trimmed.includes('<') && trimmed.includes('>')) {
+            return false;
+        }
+        
+        // Only consider very simple statements that clearly need semicolons
+        const simpleAssignment = /^[a-zA-Z_$][a-zA-Z0-9_$]*\s*=\s*[^()]+$/.test(trimmed);
+        const simpleDeclaration = /^(int|String|boolean|double|float|long|var)\s+[a-zA-Z_$][a-zA-Z0-9_$]*\s*=/.test(trimmed);
+        const simpleMethodCall = /^[a-zA-Z_$][a-zA-Z0-9_$]*\.[a-zA-Z_$][a-zA-Z0-9_$]*\([^)]*\)$/.test(trimmed);
+        
+        return simpleAssignment || simpleDeclaration || simpleMethodCall;
     }
 
     /**

@@ -1,0 +1,191 @@
+package com.example.rules;
+
+import java.util.*;
+import java.time.*;
+import java.util.stream.*;
+import java.util.function.*;
+
+global Logger logger;
+
+rule "Comprehensive Java Syntax Highlighting Demo"
+when
+    $customer : Customer(age >= 18, status == "ACTIVE")
+    $account : Account(balance > 1000.0, customerId == $customer.id)
+then
+    // Modern Java features with comprehensive syntax highlighting
+    
+    // 1. Variable declarations with var keyword (Java 10+)
+    var customerName = $customer.getName();
+    var accountBalance = $account.getBalance();
+    var currentDate = LocalDate.now();
+    
+    // 2. Collections Framework with generics
+    List<String> notifications = new ArrayList<>();
+    Map<String, Object> metadata = new HashMap<>();
+    Set<Integer> processedIds = new HashSet<>();
+    
+    // 3. Stream API operations (Java 8+)
+    List<Transaction> recentTransactions = $account.getTransactions()
+        .stream()
+        .filter(tx -> tx.getDate().isAfter(currentDate.minusDays(30)))
+        .filter(tx -> tx.getAmount() > 100.0)
+        .sorted(Comparator.comparing(Transaction::getDate).reversed())
+        .limit(10)
+        .collect(Collectors.toList());
+    
+    // 4. Optional usage for null safety
+    Optional<String> customerEmail = Optional.ofNullable($customer.getEmail())
+        .filter(email -> !email.isEmpty())
+        .map(String::toLowerCase);
+    
+    customerEmail.ifPresent(email -> {
+        notifications.add("Email notification sent to: " + email);
+        logger.info("Notification sent to customer: " + customerName);
+    });
+    
+    // 5. Time API usage (Java 8+)
+    LocalDateTime notificationTime = LocalDateTime.now();
+    Duration timeSinceLastLogin = Duration.between($customer.getLastLoginTime(), notificationTime);
+    
+    if (timeSinceLastLogin.toDays() > 30) {
+        String formattedDate = notificationTime.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+        notifications.add("Long time no see! Last login: " + formattedDate);
+    }
+    
+    // 6. Lambda expressions and method references
+    recentTransactions.forEach(tx -> {
+        String description = tx.getDescription();
+        BigDecimal amount = tx.getAmount();
+        
+        // String operations with modern features
+        String processedDescription = Optional.ofNullable(description)
+            .orElse("No description")
+            .trim()
+            .toUpperCase();
+            
+        metadata.put("tx_" + tx.getId(), Map.of(
+            "amount", amount,
+            "description", processedDescription,
+            "processed_at", Instant.now()
+        ));
+    });
+    
+    // 7. Mathematical operations
+    double riskScore = Math.max(0.0, Math.min(100.0, 
+        accountBalance * 0.1 + Math.random() * 10.0));
+    
+    BigDecimal preciseBalance = BigDecimal.valueOf(accountBalance)
+        .setScale(2, RoundingMode.HALF_UP);
+    
+    // 8. Exception handling with modern syntax
+    try {
+        // Complex business logic
+        CompletableFuture<String> asyncResult = CompletableFuture
+            .supplyAsync(() -> processCustomerData($customer))
+            .thenApply(String::toUpperCase)
+            .thenCompose(this::validateData)
+            .exceptionally(throwable -> {
+                logger.error("Error processing customer data", throwable);
+                return "ERROR";
+            });
+            
+        String result = asyncResult.get(5, TimeUnit.SECONDS);
+        notifications.add("Processing result: " + result);
+        
+    } catch (InterruptedException | ExecutionException | TimeoutException e) {
+        logger.warn("Async processing failed: " + e.getMessage());
+        notifications.add("Processing failed - using fallback");
+    }
+    
+    // 9. Pattern matching and switch expressions (Java 14+)
+    String customerTier = switch ($customer.getAccountType()) {
+        case "PREMIUM" -> "Gold";
+        case "BUSINESS" -> "Platinum";
+        case "STANDARD" -> "Silver";
+        default -> "Bronze";
+    };
+    
+    // 10. Text blocks for complex strings (Java 15+)
+    String emailTemplate = """
+        Dear %s,
+        
+        Your account balance is: $%.2f
+        Risk Score: %.1f
+        Customer Tier: %s
+        
+        Recent transactions: %d
+        
+        Best regards,
+        The Banking Team
+        """.formatted(customerName, accountBalance, riskScore, customerTier, 
+                      recentTransactions.size());
+    
+    // 11. Records usage (Java 14+)
+    record NotificationEvent(String customerId, String message, LocalDateTime timestamp) {}
+    
+    NotificationEvent event = new NotificationEvent(
+        $customer.getId(),
+        "Account processed successfully",
+        LocalDateTime.now()
+    );
+    
+    // 12. Collectors and advanced stream operations
+    Map<String, List<Transaction>> transactionsByType = recentTransactions
+        .stream()
+        .collect(Collectors.groupingBy(
+            Transaction::getType,
+            Collectors.toList()
+        ));
+    
+    String summary = transactionsByType.entrySet()
+        .stream()
+        .map(entry -> entry.getKey() + ": " + entry.getValue().size())
+        .collect(Collectors.joining(", ", "Transaction summary: [", "]"));
+    
+    // 13. Utility classes usage
+    Collections.shuffle(notifications);
+    Arrays.sort(processedIds.toArray(new Integer[0]));
+    
+    boolean hasHighValueTransactions = recentTransactions
+        .stream()
+        .anyMatch(tx -> tx.getAmount().compareTo(BigDecimal.valueOf(10000)) > 0);
+    
+    // 14. Update facts with processed information
+    modify($customer) {
+        setLastProcessedDate(currentDate),
+        setRiskScore(riskScore),
+        setTier(customerTier),
+        setNotifications(notifications)
+    }
+    
+    modify($account) {
+        setMetadata(metadata),
+        setLastAnalyzed(notificationTime)
+    }
+    
+    // 15. Insert new facts
+    insert(event);
+    insert(new ProcessingResult($customer.getId(), summary, riskScore));
+    
+    // 16. System output with formatted strings
+    System.out.printf("Processed customer %s with %d notifications%n", 
+                     customerName, notifications.size());
+    
+    logger.info("Customer processing completed: {} (Risk: {}, Tier: {})", 
+               customerName, riskScore, customerTier);
+end
+
+// Helper function demonstrating modern Java in function definitions
+function String processCustomerData(Customer customer) {
+    return Optional.ofNullable(customer)
+        .map(Customer::getName)
+        .filter(name -> !name.isBlank())
+        .map(name -> "Processed: " + name)
+        .orElse("Invalid customer data");
+}
+
+function CompletableFuture<String> validateData(String data) {
+    return CompletableFuture.completedFuture(
+        data.matches("^Processed: .+") ? data : "INVALID"
+    );
+}

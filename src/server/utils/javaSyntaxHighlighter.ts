@@ -1,0 +1,583 @@
+/**
+ * Dedicated Java Syntax Highlighter for RHS (then clause) code
+ * Provides comprehensive syntax highlighting for modern Java features
+ */
+
+export interface JavaHighlightResult {
+    highlightedCode: string;
+    tokens: JavaToken[];
+    errors: JavaSyntaxError[];
+}
+
+export interface JavaToken {
+    type: 'keyword' | 'literal' | 'primitive' | 'class' | 'method' | 'operator' | 'string' | 'number' | 'comment' | 'annotation' | 'lambda' | 'generic';
+    value: string;
+    start: number;
+    end: number;
+    line: number;
+    column: number;
+}
+
+export interface JavaSyntaxError {
+    message: string;
+    start: number;
+    end: number;
+    line: number;
+    column: number;
+    severity: 'error' | 'warning' | 'info';
+}
+
+export class JavaSyntaxHighlighter {
+    // Modern Java keywords (Java 8-21)
+    private static readonly KEYWORDS = new Set([
+        // Core keywords
+        'abstract', 'assert', 'boolean', 'break', 'byte', 'case', 'catch', 'char',
+        'class', 'const', 'continue', 'default', 'do', 'double', 'else', 'enum',
+        'extends', 'final', 'finally', 'float', 'for', 'goto', 'if', 'implements',
+        'import', 'instanceof', 'int', 'interface', 'long', 'native', 'new',
+        'package', 'private', 'protected', 'public', 'return', 'short', 'static',
+        'strictfp', 'super', 'switch', 'synchronized', 'this', 'throw', 'throws',
+        'transient', 'try', 'void', 'volatile', 'while',
+        // Modern Java keywords
+        'var', 'yield', 'record', 'sealed', 'permits', 'non-sealed'
+    ]);
+
+    private static readonly LITERALS = new Set(['null', 'true', 'false']);
+
+    private static readonly PRIMITIVES = new Set([
+        'boolean', 'byte', 'char', 'short', 'int', 'long', 'float', 'double', 'void'
+    ]);
+
+    // Comprehensive Java built-in classes
+    private static readonly BUILTIN_CLASSES = new Set([
+        // Core classes
+        'String', 'Object', 'Class', 'System', 'Math', 'Objects', 'Arrays',
+        'StringBuilder', 'StringBuffer', 'Throwable', 'Exception', 'RuntimeException', 'Error',
+        
+        // Wrapper classes
+        'Integer', 'Long', 'Double', 'Float', 'Boolean', 'Character', 'Byte', 'Short',
+        'BigDecimal', 'BigInteger', 'Number',
+        
+        // Collections Framework
+        'Collection', 'List', 'Set', 'Map', 'Queue', 'Deque', 'SortedSet', 'SortedMap',
+        'ArrayList', 'LinkedList', 'Vector', 'Stack',
+        'HashSet', 'LinkedHashSet', 'TreeSet', 'EnumSet',
+        'HashMap', 'LinkedHashMap', 'TreeMap', 'EnumMap', 'WeakHashMap', 'IdentityHashMap',
+        'ArrayDeque', 'PriorityQueue', 'ConcurrentLinkedQueue',
+        'Collections', 'Iterator', 'ListIterator', 'Enumeration', 'Spliterator',
+        
+        // Java 8+ Functional Programming
+        'Optional', 'OptionalInt', 'OptionalLong', 'OptionalDouble',
+        'Stream', 'IntStream', 'LongStream', 'DoubleStream',
+        'Collectors', 'Collector',
+        'Function', 'BiFunction', 'UnaryOperator', 'BinaryOperator',
+        'Predicate', 'BiPredicate', 'Consumer', 'BiConsumer', 'Supplier',
+        'Comparator', 'ToIntFunction', 'ToLongFunction', 'ToDoubleFunction',
+        
+        // Time API (Java 8+)
+        'LocalDate', 'LocalTime', 'LocalDateTime', 'ZonedDateTime', 'OffsetDateTime',
+        'Instant', 'Duration', 'Period', 'ZoneId', 'ZoneOffset', 'Clock',
+        'DateTimeFormatter', 'TemporalAdjusters', 'ChronoUnit', 'Month', 'DayOfWeek',
+        'Year', 'YearMonth', 'MonthDay', 'OffsetTime',
+        
+        // Concurrency
+        'Thread', 'Runnable', 'Callable', 'Future', 'CompletableFuture', 'CompletionStage',
+        'ExecutorService', 'Executors', 'ThreadPoolExecutor', 'ScheduledExecutorService',
+        'ThreadLocal', 'InheritableThreadLocal',
+        'AtomicBoolean', 'AtomicInteger', 'AtomicLong', 'AtomicReference',
+        'CountDownLatch', 'CyclicBarrier', 'Semaphore', 'Phaser',
+        'ReentrantLock', 'ReentrantReadWriteLock', 'StampedLock',
+        'ConcurrentHashMap', 'ConcurrentLinkedQueue', 'ConcurrentSkipListMap',
+        
+        // I/O and NIO
+        'File', 'Path', 'Paths', 'Files', 'FileSystem', 'FileSystems',
+        'InputStream', 'OutputStream', 'Reader', 'Writer',
+        'BufferedReader', 'BufferedWriter', 'FileReader', 'FileWriter',
+        'FileInputStream', 'FileOutputStream', 'ByteArrayInputStream', 'ByteArrayOutputStream',
+        'Scanner', 'PrintWriter', 'PrintStream', 'Console',
+        'RandomAccessFile', 'FileChannel', 'ByteBuffer', 'CharBuffer',
+        
+        // Common Exceptions
+        'IllegalArgumentException', 'IllegalStateException', 'NullPointerException',
+        'IndexOutOfBoundsException', 'UnsupportedOperationException', 'ClassCastException',
+        'NumberFormatException', 'ArithmeticException', 'SecurityException',
+        'IOException', 'FileNotFoundException', 'EOFException',
+        'InterruptedException', 'ExecutionException', 'TimeoutException',
+        
+        // Annotations
+        'Override', 'Deprecated', 'SuppressWarnings', 'FunctionalInterface', 'SafeVarargs',
+        'Retention', 'Target', 'Documented', 'Inherited', 'Repeatable', 'Native',
+        
+        // Reflection
+        'Method', 'Field', 'Constructor', 'Parameter', 'Modifier', 'Annotation',
+        'AnnotatedElement', 'Type', 'ParameterizedType', 'GenericArrayType',
+        
+        // Regular Expressions
+        'Pattern', 'Matcher', 'MatchResult',
+        
+        // Networking
+        'URL', 'URI', 'Socket', 'ServerSocket', 'DatagramSocket',
+        'HttpURLConnection', 'URLConnection', 'InetAddress',
+        
+        // Serialization
+        'Serializable', 'Externalizable', 'ObjectInputStream', 'ObjectOutputStream',
+        
+        // Utilities
+        'Random', 'UUID', 'Base64', 'Properties', 'ResourceBundle',
+        'Locale', 'Currency', 'TimeZone', 'Calendar', 'Date',
+        
+        // Text Processing
+        'Charset', 'CharsetEncoder', 'CharsetDecoder',
+        'Collator', 'RuleBasedCollator', 'MessageFormat', 'DecimalFormat'
+    ]);
+
+    // Stream and functional programming methods
+    private static readonly STREAM_METHODS = new Set([
+        'filter', 'map', 'mapToInt', 'mapToLong', 'mapToDouble', 'mapToObj',
+        'flatMap', 'flatMapToInt', 'flatMapToLong', 'flatMapToDouble',
+        'distinct', 'sorted', 'peek', 'limit', 'skip', 'takeWhile', 'dropWhile',
+        'forEach', 'forEachOrdered', 'toArray', 'reduce', 'collect',
+        'min', 'max', 'count', 'sum', 'average',
+        'anyMatch', 'allMatch', 'noneMatch', 'findFirst', 'findAny',
+        'parallel', 'sequential', 'unordered', 'onClose'
+    ]);
+
+    /**
+     * Highlight Java code with comprehensive syntax support
+     */
+    public static highlight(code: string): JavaHighlightResult {
+        const tokens: JavaToken[] = [];
+        const errors: JavaSyntaxError[] = [];
+        let highlightedCode = code;
+
+        try {
+            // Tokenize the code
+            const tokenizedResult = this.tokenize(code);
+            tokens.push(...tokenizedResult.tokens);
+            errors.push(...tokenizedResult.errors);
+
+            // Apply highlighting based on tokens
+            highlightedCode = this.applyHighlighting(code, tokens);
+
+        } catch (error) {
+            errors.push({
+                message: `Syntax highlighting error: ${error}`,
+                start: 0,
+                end: code.length,
+                line: 0,
+                column: 0,
+                severity: 'error'
+            });
+        }
+
+        return {
+            highlightedCode,
+            tokens,
+            errors
+        };
+    }
+
+    /**
+     * Tokenize Java code
+     */
+    private static tokenize(code: string): { tokens: JavaToken[]; errors: JavaSyntaxError[] } {
+        const tokens: JavaToken[] = [];
+        const errors: JavaSyntaxError[] = [];
+        const lines = code.split('\n');
+
+        for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+            const line = lines[lineIndex];
+            let columnIndex = 0;
+
+            while (columnIndex < line.length) {
+                const char = line[columnIndex];
+
+                // Skip whitespace
+                if (/\s/.test(char)) {
+                    columnIndex++;
+                    continue;
+                }
+
+                // Comments
+                if (char === '/' && columnIndex + 1 < line.length) {
+                    if (line[columnIndex + 1] === '/') {
+                        // Single-line comment
+                        tokens.push({
+                            type: 'comment',
+                            value: line.substring(columnIndex),
+                            start: columnIndex,
+                            end: line.length,
+                            line: lineIndex,
+                            column: columnIndex
+                        });
+                        break;
+                    } else if (line[columnIndex + 1] === '*') {
+                        // Multi-line comment (simplified - assumes it ends on same line)
+                        const endIndex = line.indexOf('*/', columnIndex + 2);
+                        if (endIndex !== -1) {
+                            tokens.push({
+                                type: 'comment',
+                                value: line.substring(columnIndex, endIndex + 2),
+                                start: columnIndex,
+                                end: endIndex + 2,
+                                line: lineIndex,
+                                column: columnIndex
+                            });
+                            columnIndex = endIndex + 2;
+                            continue;
+                        }
+                    }
+                }
+
+                // String literals
+                if (char === '"' || char === "'") {
+                    const result = this.parseStringLiteral(line, columnIndex, char);
+                    if (result) {
+                        tokens.push({
+                            type: 'string',
+                            value: result.value,
+                            start: columnIndex,
+                            end: result.endIndex,
+                            line: lineIndex,
+                            column: columnIndex
+                        });
+                        columnIndex = result.endIndex;
+                        continue;
+                    }
+                }
+
+                // Numbers
+                if (/\d/.test(char)) {
+                    const result = this.parseNumber(line, columnIndex);
+                    if (result) {
+                        tokens.push({
+                            type: 'number',
+                            value: result.value,
+                            start: columnIndex,
+                            end: result.endIndex,
+                            line: lineIndex,
+                            column: columnIndex
+                        });
+                        columnIndex = result.endIndex;
+                        continue;
+                    }
+                }
+
+                // Identifiers and keywords
+                if (/[a-zA-Z_$]/.test(char)) {
+                    const result = this.parseIdentifier(line, columnIndex);
+                    if (result) {
+                        const tokenType = this.getIdentifierType(result.value);
+                        tokens.push({
+                            type: tokenType,
+                            value: result.value,
+                            start: columnIndex,
+                            end: result.endIndex,
+                            line: lineIndex,
+                            column: columnIndex
+                        });
+                        columnIndex = result.endIndex;
+                        continue;
+                    }
+                }
+
+                // Operators and punctuation
+                const operatorResult = this.parseOperator(line, columnIndex);
+                if (operatorResult) {
+                    tokens.push({
+                        type: 'operator',
+                        value: operatorResult.value,
+                        start: columnIndex,
+                        end: operatorResult.endIndex,
+                        line: lineIndex,
+                        column: columnIndex
+                    });
+                    columnIndex = operatorResult.endIndex;
+                    continue;
+                }
+
+                // If we get here, we have an unrecognized character
+                columnIndex++;
+            }
+        }
+
+        return { tokens, errors };
+    }
+
+    /**
+     * Parse string literal
+     */
+    private static parseStringLiteral(line: string, startIndex: number, quote: string): { value: string; endIndex: number } | null {
+        let index = startIndex + 1;
+        let value = quote;
+
+        while (index < line.length) {
+            const char = line[index];
+            value += char;
+
+            if (char === quote) {
+                return { value, endIndex: index + 1 };
+            }
+
+            if (char === '\\' && index + 1 < line.length) {
+                // Escape sequence
+                index++;
+                value += line[index];
+            }
+
+            index++;
+        }
+
+        // Unterminated string
+        return { value, endIndex: index };
+    }
+
+    /**
+     * Parse number literal
+     */
+    private static parseNumber(line: string, startIndex: number): { value: string; endIndex: number } | null {
+        let index = startIndex;
+        let value = '';
+
+        // Handle different number formats
+        if (line[index] === '0' && index + 1 < line.length) {
+            const nextChar = line[index + 1].toLowerCase();
+            if (nextChar === 'x') {
+                // Hexadecimal
+                index += 2;
+                value = '0x';
+                while (index < line.length && /[0-9a-fA-F]/.test(line[index])) {
+                    value += line[index];
+                    index++;
+                }
+            } else if (nextChar === 'b') {
+                // Binary
+                index += 2;
+                value = '0b';
+                while (index < line.length && /[01]/.test(line[index])) {
+                    value += line[index];
+                    index++;
+                }
+            }
+        }
+
+        if (value === '') {
+            // Decimal number
+            while (index < line.length && (/\d/.test(line[index]) || line[index] === '_')) {
+                value += line[index];
+                index++;
+            }
+
+            // Decimal point
+            if (index < line.length && line[index] === '.') {
+                value += line[index];
+                index++;
+                while (index < line.length && (/\d/.test(line[index]) || line[index] === '_')) {
+                    value += line[index];
+                    index++;
+                }
+            }
+
+            // Exponent
+            if (index < line.length && /[eE]/.test(line[index])) {
+                value += line[index];
+                index++;
+                if (index < line.length && /[+-]/.test(line[index])) {
+                    value += line[index];
+                    index++;
+                }
+                while (index < line.length && /\d/.test(line[index])) {
+                    value += line[index];
+                    index++;
+                }
+            }
+        }
+
+        // Suffix
+        if (index < line.length && /[fFdDlL]/.test(line[index])) {
+            value += line[index];
+            index++;
+        }
+
+        return value ? { value, endIndex: index } : null;
+    }
+
+    /**
+     * Parse identifier
+     */
+    private static parseIdentifier(line: string, startIndex: number): { value: string; endIndex: number } | null {
+        let index = startIndex;
+        let value = '';
+
+        while (index < line.length && /[a-zA-Z0-9_$]/.test(line[index])) {
+            value += line[index];
+            index++;
+        }
+
+        return value ? { value, endIndex: index } : null;
+    }
+
+    /**
+     * Parse operator
+     */
+    private static parseOperator(line: string, startIndex: number): { value: string; endIndex: number } | null {
+        const twoCharOps = ['==', '!=', '<=', '>=', '&&', '||', '++', '--', '->', '::', '<<', '>>', '>>>', '+=', '-=', '*=', '/=', '%=', '&=', '|=', '^=', '<<=', '>>=', '>>>='];
+        const oneCharOps = ['+', '-', '*', '/', '%', '=', '<', '>', '!', '&', '|', '^', '~', '?', ':', ';', ',', '.', '(', ')', '[', ']', '{', '}'];
+
+        // Check two-character operators first
+        if (startIndex + 1 < line.length) {
+            const twoChar = line.substring(startIndex, startIndex + 2);
+            if (twoCharOps.includes(twoChar)) {
+                return { value: twoChar, endIndex: startIndex + 2 };
+            }
+        }
+
+        // Check one-character operators
+        const oneChar = line[startIndex];
+        if (oneCharOps.includes(oneChar)) {
+            return { value: oneChar, endIndex: startIndex + 1 };
+        }
+
+        return null;
+    }
+
+    /**
+     * Determine the type of an identifier
+     */
+    private static getIdentifierType(identifier: string): JavaToken['type'] {
+        if (this.KEYWORDS.has(identifier)) {
+            return 'keyword';
+        }
+        if (this.LITERALS.has(identifier)) {
+            return 'literal';
+        }
+        if (this.PRIMITIVES.has(identifier)) {
+            return 'primitive';
+        }
+        if (this.BUILTIN_CLASSES.has(identifier)) {
+            return 'class';
+        }
+        if (identifier.startsWith('@')) {
+            return 'annotation';
+        }
+        
+        // Check if it's a method call (followed by parentheses in context)
+        // This would require more context analysis
+        
+        return 'method'; // Default for identifiers
+    }
+
+    /**
+     * Apply highlighting to code based on tokens
+     */
+    private static applyHighlighting(code: string, tokens: JavaToken[]): string {
+        let highlighted = code;
+        
+        // Apply highlighting in reverse order to maintain positions
+        for (let i = tokens.length - 1; i >= 0; i--) {
+            const token = tokens[i];
+            const before = highlighted.substring(0, token.start);
+            const after = highlighted.substring(token.end);
+            const tokenValue = highlighted.substring(token.start, token.end);
+            
+            let highlightedToken = tokenValue;
+            
+            switch (token.type) {
+                case 'keyword':
+                    highlightedToken = `**${tokenValue}**`;
+                    break;
+                case 'literal':
+                    highlightedToken = `***${tokenValue}***`;
+                    break;
+                case 'primitive':
+                    highlightedToken = `**${tokenValue}**`;
+                    break;
+                case 'class':
+                    highlightedToken = `*${tokenValue}*`;
+                    break;
+                case 'method':
+                    if (this.STREAM_METHODS.has(tokenValue)) {
+                        highlightedToken = `**${tokenValue}**`;
+                    } else {
+                        highlightedToken = `*${tokenValue}*`;
+                    }
+                    break;
+                case 'operator':
+                    if (tokenValue === '->' || tokenValue === '::') {
+                        highlightedToken = `**${tokenValue}**`;
+                    } else {
+                        highlightedToken = `**${tokenValue}**`;
+                    }
+                    break;
+                case 'string':
+                    highlightedToken = `\`${tokenValue}\``;
+                    break;
+                case 'number':
+                    highlightedToken = `\`${tokenValue}\``;
+                    break;
+                case 'comment':
+                    highlightedToken = `*${tokenValue}*`;
+                    break;
+                case 'annotation':
+                    highlightedToken = `***${tokenValue}***`;
+                    break;
+                case 'lambda':
+                    highlightedToken = `**${tokenValue}**`;
+                    break;
+                case 'generic':
+                    highlightedToken = `***${tokenValue}***`;
+                    break;
+            }
+            
+            highlighted = before + highlightedToken + after;
+        }
+        
+        return highlighted;
+    }
+
+    /**
+     * Highlight Java code for markdown display
+     */
+    public static highlightForMarkdown(code: string): string {
+        const result = this.highlight(code);
+        return result.highlightedCode;
+    }
+
+    /**
+     * Get syntax errors from Java code
+     */
+    public static getSyntaxErrors(code: string): JavaSyntaxError[] {
+        const result = this.highlight(code);
+        return result.errors;
+    }
+
+    /**
+     * Check if code contains modern Java features
+     */
+    public static hasModernJavaFeatures(code: string): boolean {
+        const modernFeatures = [
+            'var ', 'Optional', 'Stream', 'LocalDate', 'LocalTime', 'LocalDateTime',
+            '->', '::', 'record ', 'sealed ', 'permits ', 'yield '
+        ];
+        
+        return modernFeatures.some(feature => code.includes(feature));
+    }
+
+    /**
+     * Extract lambda expressions from code
+     */
+    public static extractLambdaExpressions(code: string): string[] {
+        const lambdaRegex = /(\w+|\([^)]*\))\s*->\s*[^;,}]+/g;
+        const matches = code.match(lambdaRegex);
+        return matches || [];
+    }
+
+    /**
+     * Extract method references from code
+     */
+    public static extractMethodReferences(code: string): string[] {
+        const methodRefRegex = /\w+::\w+/g;
+        const matches = code.match(methodRefRegex);
+        return matches || [];
+    }
+}
