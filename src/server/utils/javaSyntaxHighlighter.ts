@@ -606,24 +606,125 @@ export class JavaSyntaxHighlighter {
      * Extract lambda expressions from code
      */
     public static extractLambdaExpressions(code: string): string[] {
-        const lambdaRegex = /(\w+|\([^)]*\))\s*->\s*[^;,})\n]*(?:\([^)]*\))?/g;
         const matches: string[] = [];
+        const lambdaStartRegex = /(\w+|\([^)]*\))\s*->/g;
         let match;
         
-        while ((match = lambdaRegex.exec(code)) !== null) {
-            let fullMatch = match[0];
-            // If the match ends with an opening parenthesis, try to find the closing one
-            if (fullMatch.endsWith('(')) {
-                const remainingCode = code.substring(match.index + fullMatch.length);
-                const closingParenMatch = remainingCode.match(/^[^)]*\)/);
-                if (closingParenMatch) {
-                    fullMatch += closingParenMatch[0];
-                }
+        while ((match = lambdaStartRegex.exec(code)) !== null) {
+            const startIndex = match.index;
+            const arrowIndex = match.index + match[0].length;
+            
+            // Extract the lambda body using proper bracket/parentheses balancing
+            const lambdaBody = this.extractLambdaBody(code, arrowIndex);
+            if (lambdaBody) {
+                const fullLambda = match[0] + lambdaBody;
+                matches.push(fullLambda);
             }
-            matches.push(fullMatch);
         }
         
         return matches;
+    }
+
+    /**
+     * Extract lambda body with proper bracket and parentheses balancing
+     */
+    private static extractLambdaBody(code: string, startIndex: number): string {
+        let i = startIndex;
+        let body = '';
+        let parenCount = 0;
+        let braceCount = 0;
+        let inString = false;
+        let stringChar = '';
+        let escaped = false;
+        
+        // Skip initial whitespace but preserve at least one space after ->
+        let hasSpace = false;
+        while (i < code.length && /\s/.test(code[i])) {
+            if (!hasSpace) {
+                body += code[i];
+                hasSpace = true;
+            }
+            i++;
+        }
+        
+        // Determine if this is a block lambda or expression lambda
+        const isBlockLambda = i < code.length && code[i] === '{';
+        
+        while (i < code.length) {
+            const char = code[i];
+            
+            // Handle string literals
+            if (!escaped && (char === '"' || char === "'")) {
+                if (!inString) {
+                    inString = true;
+                    stringChar = char;
+                } else if (char === stringChar) {
+                    inString = false;
+                    stringChar = '';
+                }
+            }
+            
+            // Handle escape sequences
+            escaped = !escaped && char === '\\' && inString;
+            
+            if (!inString) {
+                // Track parentheses and braces
+                if (char === '(') parenCount++;
+                else if (char === ')') {
+                    parenCount--;
+                    // If we're in an expression lambda and parentheses are balanced,
+                    // this closing paren likely ends the lambda
+                    if (!isBlockLambda && parenCount < 0) {
+                        break; // End of expression lambda
+                    }
+                }
+                else if (char === '{') braceCount++;
+                else if (char === '}') braceCount--;
+                
+                // For block lambdas, continue until braces are balanced
+                if (isBlockLambda) {
+                    body += char;
+                    i++;
+                    if (braceCount === 0 && body.includes('{')) {
+                        break; // Complete block lambda
+                    }
+                } else {
+                    // For expression lambdas, stop at certain delimiters when balanced
+                    if (parenCount < 0 || (parenCount === 0 && braceCount === 0)) {
+                        if (char === ';' || char === ',' || (char === ')' && parenCount < 0)) {
+                            break; // End of expression lambda
+                        }
+                        // Also stop at newline if not in the middle of a method call
+                        if (char === '\n') {
+                            // Look back to see if the previous non-whitespace was a continuation operator
+                            let k = i - 1;
+                            while (k >= 0 && /\s/.test(code[k])) k--;
+                            const prevChar = k >= 0 ? code[k] : '';
+                            
+                            // If previous character suggests continuation, keep going
+                            if (!/[&|+\-*/%<>=!,]/.test(prevChar)) {
+                                // Look ahead to see if next non-whitespace is a continuation
+                                let j = i + 1;
+                                while (j < code.length && /\s/.test(code[j]) && code[j] !== '\n') j++;
+                                if (j >= code.length || code[j] === '\n' || !/[.&|]/.test(code[j])) {
+                                    break; // End of expression
+                                }
+                            }
+                        }
+                    }
+                    
+                    if (parenCount >= 0) { // Only add char if we haven't hit the closing paren
+                        body += char;
+                    }
+                    i++;
+                }
+            } else {
+                body += char;
+                i++;
+            }
+        }
+        
+        return body;
     }
 
     /**

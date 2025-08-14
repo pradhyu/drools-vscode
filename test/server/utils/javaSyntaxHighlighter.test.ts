@@ -219,6 +219,22 @@ describe('JavaSyntaxHighlighter', () => {
             expect(lambdas[1]).toContain('item -> item.toString()');
         });
 
+        test('should extract multi-line lambda expressions', () => {
+            const multiLineCode = `list.stream()
+                .filter(item -> item.getValue() > 0 &&
+                               item.getName() != null)
+                .map(item -> {
+                    return item.toString();
+                })`;
+            const lambdas = JavaSyntaxHighlighter.extractLambdaExpressions(multiLineCode);
+            
+            expect(lambdas).toHaveLength(2);
+            expect(lambdas[0]).toContain('item.getValue() > 0 &&');
+            expect(lambdas[0]).toContain('getName() != null');
+            expect(lambdas[1]).toContain('item -> {');
+            expect(lambdas[1]).toContain('return item.toString();');
+        });
+
         test('should extract method references', () => {
             const code = 'list.stream().map(String::toUpperCase).forEach(System.out::println)';
             const methodRefs = JavaSyntaxHighlighter.extractMethodReferences(code);

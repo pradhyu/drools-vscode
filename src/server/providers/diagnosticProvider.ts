@@ -2199,28 +2199,88 @@ export class DroolsDiagnosticProvider implements ValidationCoordinator {
     }
 
     /**
+     * Check if a rule could potentially re-trigger itself based on its conditions and actions
+     */
+    private checkIfRuleCouldRetrigger(rule: RuleNode, actions: string, conditions: string): boolean {
+        // More sophisticated heuristic to determine if a rule might re-trigger itself
+        
+        // Look for patterns where the rule modifies the same type of facts it matches
+        const insertMatches = actions.match(/insert\s*\(\s*new\s+(\w+)/g);
+        const updateMatches = actions.match(/update\s*\(\s*(\$?\w+)/g);
+        const modifyMatches = actions.match(/modify\s*\(\s*(\$?\w+)/g);
+        
+        if (!insertMatches && !updateMatches && !modifyMatches) {
+            return false; // No modifying actions found
+        }
+        
+        // Check if the rule conditions match the same types being modified
+        const conditionTypes = conditions.match(/(\w+)\s*\(/g) || [];
+        const conditionTypeNames = conditionTypes.map(match => match.replace(/\s*\(/, ''));
+        
+        // Check inserts - if inserting the same type that's in conditions
+        if (insertMatches) {
+            for (const insertMatch of insertMatches) {
+                const insertedType = insertMatch.replace(/insert\s*\(\s*new\s+/, '');
+                if (conditionTypeNames.some(type => type === insertedType)) {
+                    return true;
+                }
+            }
+        }
+        
+        // Check updates/modifies - if updating variables that could affect conditions
+        if (updateMatches || modifyMatches) {
+            const allMatches = [...(updateMatches || []), ...(modifyMatches || [])];
+            for (const match of allMatches) {
+                const variable = match.replace(/(update|modify)\s*\(\s*/, '');
+                // If the variable being modified is referenced in conditions, it could re-trigger
+                if (conditions.includes(variable)) {
+                    return true;
+                }
+            }
+        }
+        
+        // Additional heuristics could be added here
+        return false;
+    }
+
+    /**
      * Validate best practices and style guidelines according to Drools documentation
      */
     private validateBestPractices(ast: DroolsAST, diagnostics: Diagnostic[]): void {
         // Note: Salience is NOT required in Drools rules. It's only needed when you want to control rule execution order.
         // According to the official Drools documentation, salience is completely optional.
 
-        // Check for rules that might cause infinite loops (actual best practice)
+        // Check for rules that might cause infinite loops (more intelligent heuristic)
         for (const rule of ast.rules) {
             const hasNoLoop = rule.attributes.some(attr => attr.name === 'no-loop');
-            if (!hasNoLoop && rule.then) {
-                // Simple heuristic: check if then clause contains insert/update/modify
+            if (!hasNoLoop && rule.then && rule.when) {
                 const actions = rule.then.actions.toLowerCase();
-                if (actions.includes('insert(') || actions.includes('update(') || actions.includes('modify(')) {
-                    diagnostics.push({
-                        severity: DiagnosticSeverity.Information,
-                        range: {
-                            start: { line: rule.range.start.line, character: rule.range.start.character },
-                            end: { line: rule.range.end.line, character: rule.range.end.character }
-                        },
-                        message: 'Consider adding no-loop attribute to prevent infinite rule execution',
-                        source: 'drools-best-practice'
-                    });
+                // Get conditions text by joining all condition text content
+                const conditionsText = rule.when.conditions.map(c => {
+                    // Try to get text content from condition node
+                    if (typeof c === 'string') return c;
+                    if (c && typeof c === 'object' && 'text' in c) return c.text || '';
+                    return '';
+                }).join(' ').toLowerCase();
+                
+                // Only suggest no-loop if the rule modifies facts that could re-trigger itself
+                const hasModifyingActions = actions.includes('insert(') || actions.includes('update(') || actions.includes('modify(');
+                
+                if (hasModifyingActions) {
+                    // More intelligent check: look for patterns that suggest the rule might re-trigger itself
+                    const couldRetrigger = this.checkIfRuleCouldRetrigger(rule, actions, conditionsText);
+                    
+                    if (couldRetrigger) {
+                        diagnostics.push({
+                            severity: DiagnosticSeverity.Hint, // Changed from Information to Hint (less intrusive)
+                            range: {
+                                start: { line: rule.range.start.line, character: rule.range.start.character },
+                                end: { line: rule.range.start.line, character: rule.range.start.character + (rule.name?.length || 0) }
+                            },
+                            message: 'Consider adding no-loop attribute to prevent infinite rule execution',
+                            source: 'drools-best-practice'
+                        });
+                    }
                 }
             }
         }

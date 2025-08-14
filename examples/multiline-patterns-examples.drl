@@ -16,43 +16,43 @@ import java.math.BigDecimal
 // =============================================================================
 
 rule "Basic Multi-line Exists Pattern"
-    salience 100
-when
+salience 100
+    when
     exists(
-        Person(
-            age >= 18,
-            name != null,
-            status == "ACTIVE"
-        )
+    Person(
+    age >= 18,
+    name != null,
+    status == "ACTIVE"
     )
-then
+    )
+    then
     System.out.println("Found at least one active adult person");
 end
 
 rule "Basic Multi-line Not Pattern"
-    salience 99
-when
+salience 99
+    when
     $person : Person(age >= 18)
     not(
-        Account(
-            owner == $person,
-            status == "SUSPENDED"
-        )
+    Account(
+    owner == $person,
+    status == "SUSPENDED"
     )
-then
+    )
+    then
     System.out.println("Person has no suspended accounts: " + $person.getName());
 end
 
 rule "Basic Multi-line Eval Pattern"
-    salience 98
-when
+salience 98
+    when
     $person : Person()
     eval(
-        $person.getAge() > 21 &&
-        $person.getName() != null &&
-        $person.getName().length() > 2
+    $person.getAge() > 21 &&
+    $person.getName() != null &&
+    $person.getName().length() > 2
     )
-then
+    then
     System.out.println("Person meets eval criteria: " + $person.getName());
 end
 
@@ -61,51 +61,52 @@ end
 // =============================================================================
 
 rule "Nested Exists and Not Patterns"
-    salience 90
-when
+salience 90
+no-loop
+    when
     $customer : Customer(status == "PREMIUM")
     exists(
-        Order(
-            customer == $customer,
-            total > 1000,
-            status == "COMPLETED"
-        ) and
-        not(
-            Payment(
-                order.customer == $customer,
-                status == "FAILED"
-            )
-        )
+    Order(
+    customer == $customer,
+    total > 1000,
+    status == "COMPLETED"
+    ) and
+    not(
+    Payment(
+    order.customer == $customer,
+    status == "FAILED"
     )
-then
+    )
+    )
+    then
     $customer.addBonusPoints(100);
     update($customer);
     System.out.println("Premium customer bonus applied: " + $customer.getName());
 end
 
 rule "Complex Nested Pattern with Multiple Levels"
-    salience 89
-when
+salience 89
+    when
     $customer : Customer()
     exists(
-        Order(
-            customer == $customer,
-            status == "PENDING"
-        ) and
-        exists(
-            Product(
-                category == "ELECTRONICS",
-                price > 500
-            ) and
-            not(
-                Discount(
-                    product.category == "ELECTRONICS",
-                    active == true
-                )
-            )
-        )
+    Order(
+    customer == $customer,
+    status == "PENDING"
+    ) and
+    exists(
+    Product(
+    category == "ELECTRONICS",
+    price > 500
+    ) and
+    not(
+    Discount(
+    product.category == "ELECTRONICS",
+    active == true
     )
-then
+    )
+    )
+    )
+    then
     // Apply special electronics discount
     Discount discount = new Discount("ELECTRONICS_SPECIAL", 0.15, true);
     insert(discount);
@@ -117,41 +118,41 @@ end
 // =============================================================================
 
 rule "All Orders Must Be Validated"
-    salience 80
-when
+salience 80
+    when
     $customer : Customer()
     forall(
-        Order(
-            customer == $customer,
-            status == "SUBMITTED"
-        )
-        Order(
-            customer == $customer,
-            status == "SUBMITTED",
-            validated == true
-        )
+    Order(
+    customer == $customer,
+    status == "SUBMITTED"
     )
-then
+    Order(
+    customer == $customer,
+    status == "SUBMITTED",
+    validated == true
+    )
+    )
+    then
     $customer.setReadyForProcessing(true);
     update($customer);
     System.out.println("All orders validated for customer: " + $customer.getName());
 end
 
 rule "All Products Must Have Sufficient Inventory"
-    salience 79
-when
+salience 79
+    when
     $order : Order(status == "PENDING")
     forall(
-        Product(
-            order.products contains this,
-            active == true
-        )
-        Inventory(
-            product == product,
-            quantity >= order.getQuantityFor(product)
-        )
+    Product(
+    order.products contains this,
+    active == true
     )
-then
+    Inventory(
+    product == product,
+    quantity >= order.getQuantityFor(product)
+    )
+    )
+    then
     $order.setStatus("READY_TO_SHIP");
     update($order);
     System.out.println("Order ready to ship: " + $order.getId());
@@ -162,44 +163,44 @@ end
 // =============================================================================
 
 rule "Collect High Priority Orders"
-    salience 70
-when
+salience 70
+    when
     $customer : Customer()
     $orders : List() from collect(
-        Order(
-            customer == $customer,
-            priority == "HIGH",
-            status == "PENDING"
-        )
+    Order(
+    customer == $customer,
+    priority == "HIGH",
+    status == "PENDING"
+    )
     )
     eval($orders.size() >= 3)
-then
+    then
     // Process bulk high-priority orders
-    for (Object orderObj : $orders) {
+    for(Object orderObj : $orders) {
         Order order = (Order) orderObj;
         order.setStatus("PROCESSING");
         order.setPriority("URGENT");
         update(order);
     }
-    System.out.println("Processed " + $orders.size() + " high-priority orders for " + $customer.getName());
+System.out.println("Processed " + $orders.size() + " high-priority orders for " + $customer.getName());
 end
 
 rule "Collect Orders by Category"
-    salience 69
-when
+salience 69
+    when
     $customer : Customer()
     $electronicsOrders : List() from collect(
-        Order(
-            customer == $customer,
-            status == "COMPLETED"
-        ) from collect(
-            Order(
-                this.products contains Product(category == "ELECTRONICS")
-            )
-        )
+    Order(
+    customer == $customer,
+    status == "COMPLETED"
+    ) from collect(
+    Order(
+    this.products contains Product(category == "ELECTRONICS")
+    )
+    )
     )
     eval($electronicsOrders.size() > 5)
-then
+    then
     $customer.setCategory("ELECTRONICS_VIP");
     update($customer);
     System.out.println("Customer promoted to Electronics VIP: " + $customer.getName());
@@ -210,70 +211,70 @@ end
 // =============================================================================
 
 rule "Calculate Total Customer Spending"
-    salience 60
-when
+salience 60
+    when
     $customer : Customer()
     $totalSpent : Number() from accumulate(
-        Order(
-            customer == $customer,
-            status == "COMPLETED"
-        ),
-        sum(total)
+    Order(
+    customer == $customer,
+    status == "COMPLETED"
+    ),
+    sum(total)
     )
     eval($totalSpent.doubleValue() > 10000)
-then
+    then
     $customer.setTier("PLATINUM");
     $customer.setDiscountRate(0.20);
     update($customer);
-    System.out.println("Customer upgraded to Platinum tier: " + $customer.getName() + 
-                      " (Total spent: $" + $totalSpent + ")");
+    System.out.println("Customer upgraded to Platinum tier: " + $customer.getName() +
+    " (Total spent: $" + $totalSpent + ")");
 end
 
 rule "Calculate Average Order Value"
-    salience 59
-when
+salience 59
+    when
     $customer : Customer()
     $avgOrderValue : Number() from accumulate(
-        Order(
-            customer == $customer,
-            status == "COMPLETED",
-            total > 0
-        ),
-        average(total)
+    Order(
+    customer == $customer,
+    status == "COMPLETED",
+    total > 0
+    ),
+    average(total)
     )
     eval($avgOrderValue.doubleValue() > 500)
-then
+    then
     $customer.addTag("HIGH_VALUE_ORDERS");
     update($customer);
-    System.out.println("High-value order customer: " + $customer.getName() + 
-                      " (Avg: $" + $avgOrderValue + ")");
+    System.out.println("High-value order customer: " + $customer.getName() +
+    " (Avg: $" + $avgOrderValue + ")");
 end
 
 rule "Count Orders by Status with Complex Accumulate"
-    salience 58
-when
+salience 58
+    when
     $customer : Customer()
     $completedCount : Number() from accumulate(
-        Order(
-            customer == $customer,
-            status == "COMPLETED",
-            total > 100
-        ),
-        count(1)
+    Order(
+    customer == $customer,
+    status == "COMPLETED",
+    total > 100
+    ),
+    count(1)
     )
     $pendingCount : Number() from accumulate(
-        Order(
-            customer == $customer,
-            status == "PENDING",
-            priority == "HIGH"
-        ),
-        count(1)
+    Order(
+    customer == $customer,
+    status == "PENDING",
+    priority == "HIGH"
+    ),
+    count(1)
     )
     eval(
-        $completedCount.intValue() > 10 &&
-        $pendingCount.intValue() < 3
+    $completedCount.intValue() > 10 &&
+    $pendingCount.intValue() < 3
     )
-then
+    then
     $customer.setProcessingPriority("FAST_TRACK");
     update($customer);
     System.out.println("Fast-track processing enabled for: " + $customer.getName());
@@ -284,118 +285,118 @@ end
 // =============================================================================
 
 rule "Complex Business Logic with Multiple Pattern Types"
-    salience 50
-when
+salience 50
+    when
     $customer : Customer(status == "ACTIVE")
-    
+
     // Check for recent high-value orders
     exists(
-        Order(
-            customer == $customer,
-            total > 1000,
-            status == "COMPLETED"
-        )
+    Order(
+    customer == $customer,
+    total > 1000,
+    status == "COMPLETED"
     )
-    
+    )
+
     // Ensure no recent payment failures
     not(
-        Payment(
-            customer == $customer,
-            status == "FAILED",
-            timestamp > (System.currentTimeMillis() - 2592000000L) // 30 days
-        )
+    Payment(
+    customer == $customer,
+    status == "FAILED",
+    timestamp > (System.currentTimeMillis() - 2592000000L) // 30 days
     )
-    
+    )
+
     // Calculate total spending in last 6 months
     $recentSpending : Number() from accumulate(
-        Order(
-            customer == $customer,
-            status == "COMPLETED",
-            timestamp > (System.currentTimeMillis() - 15552000000L) // 6 months
-        ),
-        sum(total)
+    Order(
+    customer == $customer,
+    status == "COMPLETED",
+    timestamp > (System.currentTimeMillis() - 15552000000L) // 6 months
+    ),
+    sum(total)
     )
-    
+
     // Collect pending orders
     $pendingOrders : List() from collect(
-        Order(
-            customer == $customer,
-            status == "PENDING",
-            priority != "LOW"
-        )
+    Order(
+    customer == $customer,
+    status == "PENDING",
+    priority != "LOW"
     )
-    
+    )
+
     // Validate all conditions
     eval(
-        $recentSpending.doubleValue() > 5000 &&
-        $pendingOrders.size() <= 2
+    $recentSpending.doubleValue() > 5000 &&
+    $pendingOrders.size() <= 2
     )
-then
+    then
     // Apply comprehensive customer benefits
     $customer.setTier("GOLD");
     $customer.setDiscountRate(0.15);
     $customer.setFreeShipping(true);
-    
+
     // Upgrade pending orders
-    for (Object orderObj : $pendingOrders) {
+    for(Object orderObj : $pendingOrders) {
         Order order = (Order) orderObj;
         order.setPriority("HIGH");
         order.setShippingMethod("EXPRESS");
         update(order);
     }
-    
-    update($customer);
-    System.out.println("Comprehensive benefits applied to Gold customer: " + $customer.getName());
+
+update($customer);
+System.out.println("Comprehensive benefits applied to Gold customer: " + $customer.getName());
 end
 
 rule "Inventory Management with Multi-level Patterns"
-    salience 40
-when
+salience 40
+    when
     $product : Product(active == true)
-    
+
     // Check current inventory levels
     $inventory : Inventory(
-        product == $product,
-        quantity < minimumThreshold
+    product == $product,
+    quantity < minimumThreshold
     )
-    
+
     // Ensure no recent restocking
     not(
-        exists(
-            Inventory(
-                product == $product,
-                lastRestocked > (System.currentTimeMillis() - 604800000L) // 7 days
-            )
-        )
+    exists(
+    Inventory(
+    product == $product,
+    lastRestocked > (System.currentTimeMillis() - 604800000L) // 7 days
     )
-    
+    )
+    )
+
     // Calculate demand from pending orders
     $totalDemand : Number() from accumulate(
-        Order(
-            status == "PENDING",
-            this.products contains $product
-        ),
-        sum(getQuantityFor($product))
+    Order(
+    status == "PENDING",
+    this.products contains $product
+    ),
+    sum(getQuantityFor($product))
     )
-    
+
     // Check if reorder is needed
     eval(
-        $inventory.getQuantity() < $totalDemand.intValue() ||
-        $inventory.getQuantity() < $inventory.getMinimumThreshold()
+    $inventory.getQuantity() < $totalDemand.intValue() ||
+    $inventory.getQuantity() < $inventory.getMinimumThreshold()
     )
-then
+    then
     // Create reorder request
     int reorderQuantity = Math.max(
-        $inventory.getOptimalQuantity(),
-        $totalDemand.intValue() * 2
+    $inventory.getOptimalQuantity(),
+    $totalDemand.intValue() * 2
     );
-    
+
     $inventory.setReorderQuantity(reorderQuantity);
     $inventory.setReorderRequested(true);
     update($inventory);
-    
-    System.out.println("Reorder requested for product: " + $product.getName() + 
-                      " (Quantity: " + reorderQuantity + ")");
+
+    System.out.println("Reorder requested for product: " + $product.getName() +
+    " (Quantity: " + reorderQuantity + ")");
 end
 
 // =============================================================================
@@ -403,48 +404,48 @@ end
 // =============================================================================
 
 rule "Graceful Handling of Null Values in Multi-line Patterns"
-    salience 30
-when
+salience 30
+    when
     $customer : Customer()
     exists(
-        Order(
-            customer == $customer,
-            total != null,
-            total > 0,
-            status != null,
-            status == "COMPLETED"
-        ) and
-        eval(
-            $customer.getName() != null &&
-            $customer.getEmail() != null &&
-            !$customer.getEmail().isEmpty()
-        )
+    Order(
+    customer == $customer,
+    total != null,
+    total > 0,
+    status != null,
+    status == "COMPLETED"
+    ) and
+    eval(
+    $customer.getName() != null &&
+    $customer.getEmail() != null &&
+    !$customer.getEmail().isEmpty()
     )
-then
+    )
+    then
     System.out.println("Valid customer with completed orders: " + $customer.getName());
 end
 
 rule "Complex Pattern with Multiple Eval Conditions"
-    salience 29
-when
+salience 29
+    when
     $order : Order()
     eval(
-        $order.getCustomer() != null &&
-        $order.getTotal() != null &&
-        $order.getTotal().compareTo(BigDecimal.ZERO) > 0
+    $order.getCustomer() != null &&
+    $order.getTotal() != null &&
+    $order.getTotal().compareTo(BigDecimal.ZERO) > 0
     )
     exists(
-        Payment(
-            order == $order,
-            amount != null,
-            amount.compareTo($order.getTotal()) >= 0
-        ) and
-        eval(
-            $order.getProducts() != null &&
-            !$order.getProducts().isEmpty()
-        )
+    Payment(
+    order == $order,
+    amount != null,
+    amount.compareTo($order.getTotal()) >= 0
+    ) and
+    eval(
+    $order.getProducts() != null &&
+    !$order.getProducts().isEmpty()
     )
-then
+    )
+    then
     $order.setStatus("PAID");
     update($order);
     System.out.println("Order marked as paid: " + $order.getId());
@@ -455,27 +456,27 @@ end
 // =============================================================================
 
 rule "Optimized Multi-line Pattern for Large Datasets"
-    salience 20
-when
+salience 20
+    when
     $customer : Customer(
-        status == "ACTIVE",
-        tier in ("GOLD", "PLATINUM")
+    status == "ACTIVE",
+    tier in("GOLD", "PLATINUM")
     )
     exists(
-        Order(
-            customer == $customer,
-            total > 500,
-            status == "COMPLETED"
-        )
+    Order(
+    customer == $customer,
+    total > 500,
+    status == "COMPLETED"
+    )
     )
     not(
-        Order(
-            customer == $customer,
-            status == "CANCELLED",
-            timestamp > (System.currentTimeMillis() - 2592000000L) // 30 days
-        )
+    Order(
+    customer == $customer,
+    status == "CANCELLED",
+    timestamp > (System.currentTimeMillis() - 2592000000L) // 30 days
     )
-then
+    )
+    then
     // Efficient processing for high-tier customers
     $customer.setLastProcessed(System.currentTimeMillis());
     update($customer);
@@ -485,68 +486,68 @@ end
 // DOCUMENTATION EXAMPLES FOR COMMON PATTERNS
 // =============================================================================
 
-rule "Template: Basic Exists Pattern"
-    salience 10
-when
+rule "Template : Basic Exists Pattern"
+salience 10
+    when
     // Use exists() when you need to check if at least one fact matches
     exists(
-        FactType(
-            field1 == value1,
-            field2 > value2
-        )
+    FactType(
+    field1 == value1,
+    field2 > value2
     )
-then
+    )
+    then
     // Action when at least one matching fact exists
 end
 
-rule "Template: Basic Not Pattern"
-    salience 9
-when
+rule "Template : Basic Not Pattern"
+salience 9
+    when
     $fact : FactType()
     // Use not() when you need to ensure no matching facts exist
     not(
-        RelatedFactType(
-            relatedField == $fact,
-            status == "INVALID"
-        )
+    RelatedFactType(
+    relatedField == $fact,
+    status == "INVALID"
     )
-then
+    )
+    then
     // Action when no matching facts exist
 end
 
-rule "Template: Basic Collect Pattern"
-    salience 8
-when
+rule "Template : Basic Collect Pattern"
+salience 8
+    when
     $mainFact : MainFactType()
     // Use collect() when you need to work with a collection of matching facts
     $collection : List() from collect(
-        RelatedFactType(
-            mainFact == $mainFact,
-            active == true
-        )
+    RelatedFactType(
+    mainFact == $mainFact,
+    active == true
+    )
     )
     eval($collection.size() > 0)
-then
+    then
     // Process the collected facts
-    for (Object item : $collection) {
+    for(Object item : $collection) {
         // Process each item
     }
 end
 
-rule "Template: Basic Accumulate Pattern"
-    salience 7
-when
+rule "Template : Basic Accumulate Pattern"
+salience 7
+    when
     $mainFact : MainFactType()
     // Use accumulate() when you need to perform calculations on matching facts
     $result : Number() from accumulate(
-        RelatedFactType(
-            mainFact == $mainFact,
-            value > 0
-        ),
-        sum(value) // or count(1), average(value), min(value), max(value)
+    RelatedFactType(
+    mainFact == $mainFact,
+    value > 0
+    ),
+    sum(value) // or count(1), average(value), min(value), max(value)
     )
     eval($result.doubleValue() > threshold)
-then
+    then
     // Use the calculated result
     System.out.println("Calculated result: " + $result);
 end
